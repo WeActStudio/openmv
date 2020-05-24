@@ -77,8 +77,8 @@
 #include "omv_boardconfig.h"
 
 int errno;
-extern char _vfs_buf;
-static fs_user_mount_t *vfs_fat = (fs_user_mount_t *) &_vfs_buf;
+extern char _vfs_buf[];
+static fs_user_mount_t *vfs_fat = (fs_user_mount_t *) _vfs_buf;
 pyb_thread_t pyb_thread_main;
 
 static const char fresh_main_py[] =
