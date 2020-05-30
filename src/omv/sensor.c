@@ -85,13 +85,24 @@ static int extclk_config(int frequency)
 
     /* Period should be even */
     int period = (tclk / frequency) - 1;
-
+    
+    #if defined(OMV_RUN_QSPI)
+    static uint32_t init = 0;
+    if(init == 1)
+    {
+        __HAL_TIM_SET_AUTORELOAD(&TIMHandle, period);
+        __HAL_TIM_SET_COMPARE(&TIMHandle, DCMI_TIM_CHANNEL, period / 2);
+        return 0;
+    }
+    init = 1;
+    #else
     if (TIMHandle.Init.Period && (TIMHandle.Init.Period != period)) {
         // __HAL_TIM_SET_AUTORELOAD sets TIMHandle.Init.Period...
         __HAL_TIM_SET_AUTORELOAD(&TIMHandle, period);
         __HAL_TIM_SET_COMPARE(&TIMHandle, DCMI_TIM_CHANNEL, period / 2);
         return 0;
     }
+    #endif
 
     /* Timer base configuration */
     TIMHandle.Instance           = DCMI_TIM;
