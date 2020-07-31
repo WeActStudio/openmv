@@ -1,4 +1,20 @@
 # Change Log
+## [3.6.7](https://github.com/openmv/openmv/releases/tag/v3.6.7) (2020-7-21)
+* Fix framebuffer bug introduced in 3.6.5.
+
+## [3.6.6](https://github.com/openmv/openmv/releases/tag/v3.6.6) (2020-7-18)
+* Fix broken sensor_init0.
+* Add face recognition scripts.
+
+## [3.6.5](https://github.com/openmv/openmv/releases/tag/v3.6.5) (2020-7-17)
+* Fix minor FPS counter bug.
+* Update ulab to the latest.
+* Improved Portenta board support.
+* Fix ST CUBE-AI build.
+* Update tensorflow library to the latest.
+* Remove legacy CMSIS-NN code and examples.
+* Code refactoring and cleanup.
+
 ## [3.6.4](https://github.com/openmv/openmv/releases/tag/v3.6.4) (2020-6-03)
 * Fix OV5640 imaging modes.
 * Fix floating point scaling in TensorFlow code.

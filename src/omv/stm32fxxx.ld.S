@@ -6,7 +6,7 @@
  *
  * This work is licensed under the MIT license, see the file LICENSE for details.
  *
- * Linker script for STM32F Devices.
+ * Linker script for STM32 Devices.
  */
 
 /* Entry Point */
@@ -18,6 +18,9 @@ ENTRY(Reset_Handler)
 MEMORY
 {
   CCM (xrw)         : ORIGIN = OMV_CCM_ORIGIN,      LENGTH = OMV_CCM_LENGTH
+  #if defined(OMV_ITCM_ORIGIN)
+  ITCM (xrw)        : ORIGIN = OMV_ITCM_ORIGIN,     LENGTH = OMV_ITCM_LENGTH
+  #endif
   SRAM1 (xrw)       : ORIGIN = OMV_SRAM1_ORIGIN,    LENGTH = OMV_SRAM1_LENGTH
   #if defined(OMV_SRAM2_ORIGIN)
   SRAM2 (xrw)       : ORIGIN = OMV_SRAM2_ORIGIN,    LENGTH = OMV_SRAM2_LENGTH
@@ -37,7 +40,6 @@ MEMORY
   FLASH_TEXT (rx)   : ORIGIN = OMV_TEXT_ORIGIN,     LENGTH = OMV_TEXT_LENGTH
 }
 
-_estack     = ORIGIN(OMV_MAIN_MEMORY) + LENGTH(OMV_MAIN_MEMORY);
 _ram_end    = ORIGIN(OMV_MAIN_MEMORY) + LENGTH(OMV_MAIN_MEMORY);
 
 #if defined(OMV_FFS_MEMORY)
@@ -194,7 +196,10 @@ SECTIONS
     . = ALIGN(4);
     _sstack  = .;
     . = . + _stack_size;
-  } >OMV_MAIN_MEMORY
+
+    . = ALIGN(4);
+    _estack  = .;
+  } >OMV_STACK_MEMORY
 
   .ARM.attributes 0 : { *(.ARM.attributes) }
 }

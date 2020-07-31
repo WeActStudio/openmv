@@ -423,7 +423,7 @@ int main(void)
     // NOTE: Cache should be disabled on M7.
     //SCnSCB->ACTLR |= SCnSCB_ACTLR_DISDEFWBUF_Msk;
 
-    // STM32F4xx HAL library initialization:
+    // STM32Fxxx HAL library initialization:
     //  - Set NVIC Group Priority to 4
     //  - Configure the Flash prefetch, instruction and Data caches
     //  - Configure the Systick to generate an interrupt each 1 msec
@@ -460,8 +460,8 @@ soft_reset:
 
     // Stack limit should be less than real stack size, so we have a
     // chance to recover from limit hit. (Limit is measured in bytes)
-    mp_stack_set_top(&_ram_end);
-    mp_stack_set_limit((char*)&_ram_end - (char*)&_heap_end - 1024);
+    mp_stack_set_top(&_estack);
+    mp_stack_set_limit((char*)&_estack - (char*)&_sstack - 1024);
 
     // GC init
     gc_init(&_heap_start, &_heap_end);
