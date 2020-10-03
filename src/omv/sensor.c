@@ -122,6 +122,7 @@ static int extclk_config(int frequency)
     TIMOCHandle.OCPolarity  = TIM_OCPOLARITY_HIGH;
     TIMOCHandle.OCFastMode  = TIM_OCFAST_DISABLE;
     TIMOCHandle.OCIdleState = TIM_OCIDLESTATE_RESET;
+    TIMOCHandle.OCNIdleState= TIM_OCIDLESTATE_RESET;
 
     if ((HAL_TIM_PWM_Init(&TIMHandle) != HAL_OK)
     || (HAL_TIM_PWM_ConfigChannel(&TIMHandle, &TIMOCHandle, DCMI_TIM_CHANNEL) != HAL_OK)
@@ -250,6 +251,12 @@ void sensor_init0()
 
     // Set fb_enabled
     JPEG_FB()->enabled = fb_enabled; // controlled by the IDE.
+    #ifdef PORTENTA
+    // The Portenta board uses the same I2C bus for the sensor and
+    // user scripts. The I2C bus must be reinitialized on soft-reset.
+    cambus_init(&sensor.i2c, SCCB_I2C, SCCB_TIMING);
+    #endif
+
 }
 
 int sensor_init()
@@ -358,75 +365,93 @@ int sensor_init()
     sensor.snapshot = sensor_snapshot;
 
     switch (sensor.slv_addr) {
-    case OV2640_SLV_ADDR:
-        cambus_readb(&sensor.i2c, sensor.slv_addr, OV_CHIP_ID, &sensor.chip_id);
-        break;
-    case OV5640_SLV_ADDR:
-        cambus_readb2(&sensor.i2c, sensor.slv_addr, OV5640_CHIP_ID, &sensor.chip_id);
-        break;
-    case OV7725_SLV_ADDR: // Same for OV7690.
-        cambus_readb(&sensor.i2c, sensor.slv_addr, OV_CHIP_ID, &sensor.chip_id);
-        break;
-    case MT9V034_SLV_ADDR:
-        cambus_readb(&sensor.i2c, sensor.slv_addr, ON_CHIP_ID, &sensor.chip_id);
-        break;
-    case LEPTON_SLV_ADDR:
-        sensor.chip_id = LEPTON_ID;
-        break;
-    #if (OMV_ENABLE_HM01B0 == 1)
-    case HM01B0_SLV_ADDR:
-        cambus_readb2(&sensor.i2c, sensor.slv_addr, HIMAX_CHIP_ID, &sensor.chip_id);
-        break;
-    #endif //(OMV_ENABLE_HM01B0 == 1)
-    default:
-        return -3;
-        break;
+        case OV2640_SLV_ADDR: // Or OV9650.
+            cambus_readb(&sensor.i2c, sensor.slv_addr, OV_CHIP_ID, &sensor.chip_id);
+            break;
+        case OV5640_SLV_ADDR:
+            cambus_readb2(&sensor.i2c, sensor.slv_addr, OV5640_CHIP_ID, &sensor.chip_id);
+            break;
+        case OV7725_SLV_ADDR: // Or OV7690.
+            cambus_readb(&sensor.i2c, sensor.slv_addr, OV_CHIP_ID, &sensor.chip_id);
+            break;
+        case MT9V034_SLV_ADDR:
+            cambus_readb(&sensor.i2c, sensor.slv_addr, ON_CHIP_ID, &sensor.chip_id);
+            break;
+        case LEPTON_SLV_ADDR:
+            sensor.chip_id = LEPTON_ID;
+            break;
+        case HM01B0_SLV_ADDR:
+            cambus_readb2(&sensor.i2c, sensor.slv_addr, HIMAX_CHIP_ID, &sensor.chip_id);
+            break;
+        default:
+            return -3;
+            break;
     }
 
     switch (sensor.chip_id) {
-    case OV2640_ID:
-        init_ret = ov2640_init(&sensor);
-        break;
-    case OV5640_ID:
-        if (extclk_config(OV5640_XCLK_FREQ) != 0) {
+        #if (OMV_ENABLE_OV2640 == 1)
+        case OV2640_ID:
+            init_ret = ov2640_init(&sensor);
+            break;
+        #endif // (OMV_ENABLE_OV2640 == 1)
+
+        #if (OMV_ENABLE_OV5640 == 1)
+        case OV5640_ID:
+            if (extclk_config(OV5640_XCLK_FREQ) != 0) {
+                return -3;
+            }
+            init_ret = ov5640_init(&sensor);
+            break;
+        #endif // (OMV_ENABLE_OV5640 == 1)
+
+        #if (OMV_ENABLE_OV7690 == 1)
+        case OV7690_ID:
+            if (extclk_config(OV7690_XCLK_FREQ) != 0) {
+                return -3;
+            }
+            init_ret = ov7690_init(&sensor);
+            break;
+        #endif // (OMV_ENABLE_OV7690 == 1)
+
+        #if (OMV_ENABLE_OV7725 == 1)
+        case OV7725_ID:
+            init_ret = ov7725_init(&sensor);
+            break;
+        #endif // (OMV_ENABLE_OV7725 == 1)
+
+        #if (OMV_ENABLE_OV9650 == 1)
+        case OV9650_ID:
+            init_ret = ov9650_init(&sensor);
+            break;
+        #endif // (OMV_ENABLE_OV9650 == 1)
+
+        #if (OMV_ENABLE_MT9V034 == 1)
+        case MT9V034_ID:
+            if (extclk_config(MT9V034_XCLK_FREQ) != 0) {
+                return -3;
+            }
+            init_ret = mt9v034_init(&sensor);
+            break;
+        #endif //(OMV_ENABLE_MT9V034 == 1)
+
+        #if (OMV_ENABLE_LEPTON == 1)
+        case LEPTON_ID:
+            if (extclk_config(LEPTON_XCLK_FREQ) != 0) {
+                return -3;
+            }
+            init_ret = lepton_init(&sensor);
+            break;
+        #endif // (OMV_ENABLE_LEPTON == 1)
+
+        #if (OMV_ENABLE_HM01B0 == 1)
+        case HM01B0_ID:
+            init_ret = hm01b0_init(&sensor);
+            break;
+        #endif //(OMV_ENABLE_HM01B0 == 1)
+
+        default:
             return -3;
-        }
-        init_ret = ov5640_init(&sensor);
-        break;
-    case OV7725_ID:
-        init_ret = ov7725_init(&sensor);
-        break;
-    #if (OMV_ENABLE_OV7690 == 1)
-    case OV7690_ID:
-        if (extclk_config(OV7690_XCLK_FREQ) != 0) {
-            return -3;
-        }
-        init_ret = ov7690_init(&sensor);
-        break;
-    #endif //(OMV_ENABLE_OV7690 == 1)
-    case OV9650_ID:
-        init_ret = ov9650_init(&sensor);
-        break;
-    case MT9V034_ID:
-        if (extclk_config(MT9V034_XCLK_FREQ) != 0) {
-            return -3;
-        }
-        init_ret = mt9v034_init(&sensor);
-        break;
-    case LEPTON_ID:
-        if (extclk_config(LEPTON_XCLK_FREQ) != 0) {
-            return -3;
-        }
-        init_ret = lepton_init(&sensor);
-        break;
-    #if (OMV_ENABLE_HM01B0 == 1)
-    case HM01B0_ID:
-        init_ret = hm01b0_init(&sensor);
-        break;
-    #endif //(OMV_ENABLE_HM01B0 == 1)
-    default:
-        return -3;
-        break;
+            break;
     }
 
     if (init_ret != 0 ) {
@@ -457,6 +482,8 @@ int sensor_init()
     // Set default color palette.
     sensor.color_palette = rainbow_table;
 
+    sensor.detected = true;
+
     /* All good! */
     return 0;
 }
@@ -486,6 +513,18 @@ int sensor_reset()
     // Restore shutdown state on reset.
     sensor_shutdown(false);
 
+    // Hard-reset the sensor
+    if (sensor.reset_pol == ACTIVE_HIGH) {
+        DCMI_RESET_HIGH();
+        systick_sleep(10);
+        DCMI_RESET_LOW();
+    } else {
+        DCMI_RESET_LOW();
+        systick_sleep(10);
+        DCMI_RESET_HIGH();
+    }
+    systick_sleep(20);
+
     // Call sensor-specific reset function
     if (sensor.reset(&sensor) != 0) {
         return -1;
@@ -499,6 +538,11 @@ int sensor_reset()
 int sensor_get_id()
 {
     return sensor.chip_id;
+}
+
+bool sensor_is_detected()
+{
+    return sensor.detected;
 }
 
 int sensor_sleep(int enable)

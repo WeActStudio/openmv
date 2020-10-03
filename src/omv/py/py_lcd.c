@@ -19,20 +19,20 @@
 #include "py_helper.h"
 #include "py_image.h"
 
-#define RST_PORT            GPIOD
-#define RST_PIN             GPIO_PIN_12
+#define RST_PORT            GPIOE
+#define RST_PIN             GPIO_PIN_15
 #define RST_PIN_WRITE(bit)  HAL_GPIO_WritePin(RST_PORT, RST_PIN, bit);
 
-#define RS_PORT             GPIOD
+#define RS_PORT             GPIOE
 #define RS_PIN              GPIO_PIN_13
 #define RS_PIN_WRITE(bit)   HAL_GPIO_WritePin(RS_PORT, RS_PIN, bit);
 
-#define CS_PORT             GPIOB
-#define CS_PIN              GPIO_PIN_12
+#define CS_PORT             GPIOE
+#define CS_PIN              GPIO_PIN_11
 #define CS_PIN_WRITE(bit)   HAL_GPIO_WritePin(CS_PORT, CS_PIN, bit);
 
-#define LED_PORT            GPIOA
-#define LED_PIN             GPIO_PIN_5
+#define LED_PORT            GPIOE
+#define LED_PIN             GPIO_PIN_10
 #define LED_PIN_WRITE(bit)  HAL_GPIO_WritePin(LED_PORT, LED_PIN, bit);
 
 extern mp_obj_t pyb_spi_send(mp_uint_t n_args, const mp_obj_t *pos_args, mp_map_t *kw_args);
@@ -42,7 +42,7 @@ extern mp_obj_t pyb_spi_deinit(mp_obj_t self_in);
 static mp_obj_t spi_port = NULL;
 static int width = 0;
 static int height = 0;
-static enum { LCD_NONE, LCD_SHIELD } type = LCD_NONE;
+static enum { LCD_NONE, LCD_SHIELD_1_8 , LCD_SHIELD_0_96} type = LCD_NONE;
 static bool backlight_init = false;
 
 // Send out 8-bit data using the SPI object.
@@ -132,7 +132,8 @@ static mp_obj_t py_lcd_deinit()
     switch (type) {
         case LCD_NONE:
             return mp_const_none;
-        case LCD_SHIELD:
+        case LCD_SHIELD_0_96:
+        case LCD_SHIELD_1_8:
             HAL_GPIO_DeInit(RST_PORT, RST_PIN);
             HAL_GPIO_DeInit(RS_PORT, RS_PIN);
             HAL_GPIO_DeInit(CS_PORT, CS_PIN);
@@ -153,10 +154,10 @@ static mp_obj_t py_lcd_deinit()
 static mp_obj_t py_lcd_init(uint n_args, const mp_obj_t *args, mp_map_t *kw_args)
 {
     py_lcd_deinit();
-    switch (py_helper_keyword_int(n_args, args, 0, kw_args, MP_OBJ_NEW_QSTR(MP_QSTR_type), LCD_SHIELD)) {
+    switch (py_helper_keyword_int(n_args, args, 0, kw_args, MP_OBJ_NEW_QSTR(MP_QSTR_type), LCD_SHIELD_0_96)) {
         case LCD_NONE:
             return mp_const_none;
-        case LCD_SHIELD:
+        case LCD_SHIELD_1_8:
         {
             GPIO_InitTypeDef GPIO_InitStructure;
             GPIO_InitStructure.Pull  = GPIO_NOPULL;
@@ -173,15 +174,11 @@ static mp_obj_t py_lcd_init(uint n_args, const mp_obj_t *args, mp_map_t *kw_args
             RST_PIN_WRITE(true); // Set first to prevent glitches.
             HAL_GPIO_Init(RST_PORT, &GPIO_InitStructure);
 
-            GPIO_InitStructure.Pin = RS_PIN;
-            RS_PIN_WRITE(true); // Set first to prevent glitches.
-            HAL_GPIO_Init(RS_PORT, &GPIO_InitStructure);
-
             spi_port = pyb_spi_make_new(NULL,
                 2, // n_args
                 3, // n_kw
                 (mp_obj_t []) {
-                    MP_OBJ_NEW_SMALL_INT(2), // SPI Port
+                    MP_OBJ_NEW_SMALL_INT(4), // SPI Port
                     MP_OBJ_NEW_SMALL_INT(SPI_MODE_MASTER),
                     MP_OBJ_NEW_QSTR(MP_QSTR_baudrate),
                     MP_OBJ_NEW_SMALL_INT(1000000000/66), // 66 ns clk period
@@ -191,17 +188,35 @@ static mp_obj_t py_lcd_init(uint n_args, const mp_obj_t *args, mp_map_t *kw_args
                     MP_OBJ_NEW_SMALL_INT(0)
                 }
             );
+            
+            GPIO_InitStructure.Pin = RS_PIN;
+            RS_PIN_WRITE(true); // Set first to prevent glitches.
+            HAL_GPIO_Init(RS_PORT, &GPIO_InitStructure);
+
             width = 128;
             height = 160;
-            type = LCD_SHIELD;
+            type = LCD_SHIELD_1_8;
             backlight_init = false;
-
+            lcd_write_command_byte(0x01); //software reset
             RST_PIN_WRITE(false);
-            systick_sleep(100);
+            systick_sleep(120);
             RST_PIN_WRITE(true);
-            systick_sleep(100);
+            lcd_write_command_byte(0x01); //software reset
+            systick_sleep(120);
             lcd_write_command_byte(0x11); // Sleep Exit
             systick_sleep(120);
+
+            lcd_write_command(0xB1, 3, (uint8_t []) {0x01, 0x2C, 0x2D});
+            lcd_write_command_byte(0xB2);
+            lcd_write_command(0xB3, 6, (uint8_t []) {0x01, 0x2c, 0x2d, 0x01, 0x2c, 0x2d});
+            lcd_write_command(0xB4, 1, (uint8_t []) {0x07});
+
+            lcd_write_command(0xC0, 3, (uint8_t []) {0xA2, 0x02, 0x84});
+            lcd_write_command(0xC1, 1, (uint8_t []) {0xC5});
+            lcd_write_command(0xC2, 2, (uint8_t []) {0x0A, 0x00});
+            lcd_write_command(0xC3, 2, (uint8_t []) {0x8A, 0x2A});
+            lcd_write_command(0xC4, 1, (uint8_t []) {0x8A, 0xEE});
+            lcd_write_command(0xC5, 1, (uint8_t []) {0x0E});
 
             // Memory Data Access Control
             uint8_t madctl = 0xC0;
@@ -211,12 +226,142 @@ static mp_obj_t py_lcd_init(uint n_args, const mp_obj_t *args, mp_map_t *kw_args
             // Interface Pixel Format
             lcd_write_command(0x3A, 1, (uint8_t []) {0x05});
 
+            // choose panel
+            lcd_write_command_byte(0x20);
+            // column
+            lcd_write_command(0x2A, 4, (uint8_t []) {0, 0, 0, width-1});
+            // row
+            lcd_write_command(0x2B, 4, (uint8_t []) {0, 0, 0, height-1});
+            // GMCTRP
+            lcd_write_command(0xE0, 16, (uint8_t []) {0x02, 0x1c, 0x07, 0x12, 0x37, 0x32, 0x29, 0x2d, 0x29,
+                                0x25, 0x2b, 0x39, 0x00, 0x01, 0x03, 0x10});
+            // GMCTRN
+            lcd_write_command(0xE1, 16, (uint8_t []) {0x03, 0x1d, 0x07, 0x06, 0x2e, 0x2c, 0x29, 0x2d, 0x2e,
+                                0x2e, 0x37, 0x3f, 0x00, 0x00, 0x02, 0x10});
+            
+            // Display on
+            lcd_write_command_byte(0x13);
+            systick_sleep(10);
             // Display on
             lcd_write_command_byte(0x29);
+            systick_sleep(100);
+            
+            if (!backlight_init) {
+                GPIO_InitTypeDef GPIO_InitStructure;
+                GPIO_InitStructure.Pull  = GPIO_NOPULL;
+                GPIO_InitStructure.Speed = GPIO_SPEED_LOW;
+                GPIO_InitStructure.Mode  = GPIO_MODE_OUTPUT_OD;
+                GPIO_InitStructure.Pin = LED_PIN;
+                LED_PIN_WRITE(false); // Set first to prevent glitches.
+                HAL_GPIO_Init(LED_PORT, &GPIO_InitStructure);
+                backlight_init = true;
+            }
+            return mp_const_none;
+        }
+        case LCD_SHIELD_0_96:
+        {
+            GPIO_InitTypeDef GPIO_InitStructure;
+            GPIO_InitStructure.Pull  = GPIO_NOPULL;
+            GPIO_InitStructure.Speed = GPIO_SPEED_LOW;
+            GPIO_InitStructure.Mode  = GPIO_MODE_OUTPUT_OD;
 
+            GPIO_InitStructure.Pin = CS_PIN;
+            CS_PIN_WRITE(true); // Set first to prevent glitches.
+            HAL_GPIO_Init(CS_PORT, &GPIO_InitStructure);
+
+            GPIO_InitStructure.Mode = GPIO_MODE_OUTPUT_PP;
+
+            GPIO_InitStructure.Pin = RST_PIN;
+            RST_PIN_WRITE(true); // Set first to prevent glitches.
+            HAL_GPIO_Init(RST_PORT, &GPIO_InitStructure);
+
+            spi_port = pyb_spi_make_new(NULL,
+                2, // n_args
+                3, // n_kw
+                (mp_obj_t []) {
+                    MP_OBJ_NEW_SMALL_INT(4), // SPI Port
+                    MP_OBJ_NEW_SMALL_INT(SPI_MODE_MASTER),
+                    MP_OBJ_NEW_QSTR(MP_QSTR_prescaler),
+                    MP_OBJ_NEW_SMALL_INT(8), // 66 ns clk period
+                    MP_OBJ_NEW_QSTR(MP_QSTR_polarity),
+                    MP_OBJ_NEW_SMALL_INT(0),
+                    MP_OBJ_NEW_QSTR(MP_QSTR_phase),
+                    MP_OBJ_NEW_SMALL_INT(0)
+                }
+            );
+            
+            GPIO_InitStructure.Pin = RS_PIN;
+            RS_PIN_WRITE(true); // Set first to prevent glitches.
+            HAL_GPIO_Init(RS_PORT, &GPIO_InitStructure);
+
+            width = 160;
+            height = 80;
+            type = LCD_SHIELD_0_96;
+            backlight_init = false;
+            lcd_write_command_byte(0x01); //software reset
+            RST_PIN_WRITE(false);
+            systick_sleep(120);
+            RST_PIN_WRITE(true);
+            lcd_write_command_byte(0x01); //software reset
+            systick_sleep(120);
+            lcd_write_command_byte(0x11); // Sleep Exit
+            systick_sleep(120);
+            lcd_write_command(0xB1, 3, (uint8_t []) {0x01, 0x2C, 0x2D});
+            lcd_write_command_byte(0xB2);
+            lcd_write_command(0xB3, 6, (uint8_t []) {0x01, 0x2c, 0x2d, 0x01, 0x2c, 0x2d});
+            lcd_write_command(0xB4, 1, (uint8_t []) {0x07});
+
+            lcd_write_command(0xC0, 3, (uint8_t []) {0xA2, 0x02, 0x84});
+            lcd_write_command(0xC1, 1, (uint8_t []) {0xC5});
+            lcd_write_command(0xC2, 2, (uint8_t []) {0x0A, 0x00});
+            lcd_write_command(0xC3, 2, (uint8_t []) {0x8A, 0x2A});
+            lcd_write_command(0xC4, 1, (uint8_t []) {0x8A, 0xEE});
+            lcd_write_command(0xC5, 1, (uint8_t []) {0x0E});
+            // choose panel
+            lcd_write_command_byte(0x21);
+
+            // Memory Data Access Control
+            uint8_t madctl = 0xA0;
+            uint8_t bgr = py_helper_keyword_int(n_args, args, 0, kw_args, MP_OBJ_NEW_QSTR(MP_QSTR_bgr), 1);
+            lcd_write_command(0x36, 1, (uint8_t []) {madctl | (bgr<<3)});
+
+            // Interface Pixel Format
+            lcd_write_command(0x3A, 1, (uint8_t []) {0x05});
+
+            // set Window
+            uint8_t xPos = 1;
+            uint8_t yPos = 26;
+
+            // column
+            lcd_write_command(0x2A, 4, (uint8_t []) {0, xPos&0xFF, 0, xPos+width-1});
+            // row
+            lcd_write_command(0x2B, 4, (uint8_t []) {0, yPos&0xFF, 0, yPos+height-1});
+            // GMCTRP
+            lcd_write_command(0xE0, 16, (uint8_t []) {0x02, 0x1c, 0x07, 0x12, 0x37, 0x32, 0x29, 0x2d, 0x29,
+                                0x25, 0x2b, 0x39, 0x00, 0x01, 0x03, 0x10});
+            // GMCTRN
+            lcd_write_command(0xE1, 16, (uint8_t []) {0x03, 0x1d, 0x07, 0x06, 0x2e, 0x2c, 0x29, 0x2d, 0x2e,
+                                0x2e, 0x37, 0x3f, 0x00, 0x00, 0x02, 0x10});
+            
+            // Display on
+            lcd_write_command_byte(0x13);
+            systick_sleep(10);
+            lcd_write_command_byte(0x29);
+            systick_sleep(100);
+            if (!backlight_init) {
+                GPIO_InitTypeDef GPIO_InitStructure;
+                GPIO_InitStructure.Pull  = GPIO_NOPULL;
+                GPIO_InitStructure.Speed = GPIO_SPEED_LOW;
+                GPIO_InitStructure.Mode  = GPIO_MODE_OUTPUT_OD;
+                GPIO_InitStructure.Pin = LED_PIN;
+                LED_PIN_WRITE(false); // Set first to prevent glitches.
+                HAL_GPIO_Init(LED_PORT, &GPIO_InitStructure);
+                backlight_init = true;
+            }
             return mp_const_none;
         }
     }
+    
     return mp_const_none;
 }
 
@@ -243,9 +388,10 @@ static mp_obj_t py_lcd_set_backlight(mp_obj_t state_obj)
     switch (type) {
         case LCD_NONE:
             return mp_const_none;
-        case LCD_SHIELD:
+        case LCD_SHIELD_0_96:
+        case LCD_SHIELD_1_8:
         {
-            bool bit = !!mp_obj_get_int(state_obj);
+            bool bit = !mp_obj_get_int(state_obj);
             if (!backlight_init) {
                 GPIO_InitTypeDef GPIO_InitStructure;
                 GPIO_InitStructure.Pull  = GPIO_NOPULL;
@@ -268,11 +414,12 @@ static mp_obj_t py_lcd_get_backlight()
     switch (type) {
         case LCD_NONE:
             return mp_const_none;
-        case LCD_SHIELD:
+        case LCD_SHIELD_0_96:
+        case LCD_SHIELD_1_8:
             if (!backlight_init) {
                 return mp_const_none;
             }
-            return mp_obj_new_int(HAL_GPIO_ReadPin(LED_PORT, LED_PIN));
+            return mp_obj_new_int(!HAL_GPIO_ReadPin(LED_PORT, LED_PIN));
     }
     return mp_const_none;
 }
@@ -312,7 +459,7 @@ static mp_obj_t py_lcd_display(uint n_args, const mp_obj_t *args, mp_map_t *kw_a
     switch (type) {
         case LCD_NONE:
             return mp_const_none;
-        case LCD_SHIELD:
+        case LCD_SHIELD_1_8:
             lcd_write_command_byte(0x2C);
             fb_alloc_mark();
             uint8_t *zero = fb_alloc0(width*2, FB_ALLOC_NO_HINT);
@@ -344,6 +491,43 @@ static mp_obj_t py_lcd_display(uint n_args, const mp_obj_t *args, mp_map_t *kw_a
             }
             fb_alloc_free_till_mark();
             return mp_const_none;
+        case LCD_SHIELD_0_96:
+            // column
+            lcd_write_command(0x2A, 2, (uint8_t []) {0, 1});
+            // row
+            lcd_write_command(0x2B, 2, (uint8_t []) {0, 26});
+            
+            lcd_write_command_byte(0x2C);
+            fb_alloc_mark();
+            uint8_t *zero_096 = fb_alloc0(width*2, FB_ALLOC_NO_HINT);
+            uint16_t *line_096 = fb_alloc(width*2, FB_ALLOC_NO_HINT);
+            for (int i=0; i<t_pad; i++) {
+                lcd_write_data(width*2, zero_096);
+            }
+            for (int i=0; i<rect.h; i++) {
+                if (l_pad) {
+                    lcd_write_data(l_pad*2, zero_096); // l_pad < width
+                }
+                if (IM_IS_GS(arg_img)) {
+                    for (int j=0; j<rect.w; j++) {
+                        uint8_t pixel = IM_GET_GS_PIXEL(arg_img, (rect.x + j), (rect.y + i));
+                        line_096[j] = IM_RGB565(IM_R825(pixel),IM_G826(pixel),IM_B825(pixel));
+                    }
+                    lcd_write_data(rect.w*2, (uint8_t *) line_096);
+                } else {
+                    lcd_write_data(rect.w*2, (uint8_t *)
+                        (((uint16_t *) arg_img->pixels) +
+                        ((rect.y + i) * arg_img->w) + rect.x));
+                }
+                if (r_pad) {
+                    lcd_write_data(r_pad*2, zero_096); // r_pad < width
+                }
+            }
+            for (int i=0; i<b_pad; i++) {
+                lcd_write_data(width*2, zero_096);
+            }
+            fb_alloc_free_till_mark();
+            return mp_const_none;
     }
     return mp_const_none;
 }
@@ -353,7 +537,21 @@ static mp_obj_t py_lcd_clear()
     switch (type) {
         case LCD_NONE:
             return mp_const_none;
-        case LCD_SHIELD:
+        case LCD_SHIELD_0_96:
+            // column
+            lcd_write_command(0x2A, 2, (uint8_t []) {0, 1});
+            // row
+            lcd_write_command(0x2B, 2, (uint8_t []) {0, 26});
+
+            lcd_write_command_byte(0x2C);
+            fb_alloc_mark();
+            uint8_t *zero_096 = fb_alloc0(width*2, FB_ALLOC_NO_HINT);
+            for (int i=0; i<height; i++) {
+                lcd_write_data(width*2, zero_096);
+            }
+            fb_alloc_free_till_mark();
+            return mp_const_none;
+        case LCD_SHIELD_1_8:
             lcd_write_command_byte(0x2C);
             fb_alloc_mark();
             uint8_t *zero = fb_alloc0(width*2, FB_ALLOC_NO_HINT);

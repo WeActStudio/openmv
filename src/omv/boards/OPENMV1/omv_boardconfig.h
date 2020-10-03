@@ -38,7 +38,6 @@
 
 // HSE/HSI/CSI State
 #define OMV_OSC_HSE_STATE       (RCC_HSE_ON)
-#define OMV_OSC_HSI_STATE       (RCC_HSI_OFF)
 
 // Flash Latency
 #define OMV_FLASH_LATENCY       (FLASH_LATENCY_5)
@@ -50,8 +49,8 @@
 #define OMV_TEXT_LENGTH     448K
 #define OMV_SRAM1_ORIGIN    0x20000000
 #define OMV_SRAM1_LENGTH    128K
-#define OMV_CCM_ORIGIN      0x10000000
-#define OMV_CCM_LENGTH      64K
+#define OMV_DTCM_ORIGIN      0x10000000
+#define OMV_DTCM_LENGTH      64K
 
 /* SCCB/I2C */
 #define SCCB_I2C                (I2C1)
