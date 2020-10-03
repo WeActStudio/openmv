@@ -68,6 +68,7 @@ OMV_QSTR_DEFS = $(TOP_DIR)/$(OMV_DIR)/py/qstrdefsomv.h
 ifeq ($(DEBUG), 1)
 CFLAGS += -O0 -ggdb3
 else
+DEBUG=0
 CFLAGS += -O2 -ggdb3 -DNDEBUG
 endif
 
@@ -113,15 +114,35 @@ MP_CFLAGS += -I$(TOP_DIR)/$(MICROPY_DIR)/
 MP_CFLAGS += -I$(TOP_DIR)/$(MICROPY_DIR)/py/
 MP_CFLAGS += -I$(TOP_DIR)/$(MICROPY_DIR)/lib/mp-readline
 MP_CFLAGS += -I$(TOP_DIR)/$(MICROPY_DIR)/lib/oofatfs
+MP_CFLAGS += -I$(TOP_DIR)/$(MICROPY_DIR)/lib/lwip/src/include/
 MP_CFLAGS += -I$(TOP_DIR)/$(MICROPY_DIR)/ports/stm32/
 MP_CFLAGS += -I$(TOP_DIR)/$(MICROPY_DIR)/ports/stm32/usbdev/core/inc/
 MP_CFLAGS += -I$(TOP_DIR)/$(MICROPY_DIR)/ports/stm32/usbdev/class/inc/
+MP_CFLAGS += -I$(TOP_DIR)/$(MICROPY_DIR)/ports/stm32/lwip_inc/
 MP_CFLAGS += -I$(MP_BOARD_CONFIG_DIR)
+
+# In addition to CFLAGS, the following options are needed to set varilables
+# in MicroPython's Makefile, to enable or disable compiling additional modules.
+MICROPY_ARGS = BOARD=$(TARGET) DEBUG=$(DEBUG) QSTR_DEFS="$(OMV_QSTR_DEFS)"
 ifeq ($(MICROPY_PY_WINC1500), 1)
 MP_CFLAGS += -DMICROPY_PY_WINC1500=1
+MICROPY_ARGS += MICROPY_PY_WINC1500=1
 endif
 ifeq ($(MICROPY_PY_IMU), 1)
 MP_CFLAGS += -DMICROPY_PY_IMU=1
+MICROPY_ARGS += MICROPY_PY_IMU=1
+endif
+ifeq ($(MICROPY_PY_ULAB), 1)
+MP_CFLAGS += -DMICROPY_PY_ULAB=1
+MICROPY_ARGS += MICROPY_PY_ULAB=1
+endif
+ifeq ($(MICROPY_PY_LWIP), 1)
+MP_CFLAGS += -DMICROPY_PY_LWIP=1
+MICROPY_ARGS += MICROPY_PY_LWIP=1
+endif
+ifeq ($(MICROPY_PY_NETWORK_CYW43), 1)
+MP_CFLAGS += -DMICROPY_PY_NETWORK_CYW43=1
+MICROPY_ARGS += MICROPY_PY_NETWORK_CYW43=1
 endif
 
 OMV_CFLAGS += -I$(TOP_DIR)/$(OMV_DIR)/
@@ -382,7 +403,7 @@ FIRM_OBJ += $(addprefix $(BUILD)/$(MICROPY_DIR)/lib/,\
 	utils/sys_stdio_mphal.o     \
 	utils/gchelper_m3.o         \
 	libc/string0.o              \
-	netutils/netutils.o         \
+	netutils/*.o                \
 	timeutils/timeutils.o       \
 	berkeley-db-1.xx/btree/*.o  \
 	berkeley-db-1.xx/mpool/*.o  \
@@ -482,6 +503,29 @@ FIRM_OBJ += $(addprefix $(BUILD)/$(MICROPY_DIR)/extmod/ulab/,\
 	code/filter.o		\
 	code/compare.o		\
 	code/extras.o		\
+	)
+endif
+
+ifeq ($(MICROPY_PY_LWIP), 1)
+FIRM_OBJ += $(addprefix $(BUILD)/$(MICROPY_DIR)/,\
+	lib/lwip/src/core/*.o      \
+	lib/lwip/src/core/*/*.o    \
+	lib/lwip/src/netif/*.o     \
+	lib/lwip/src/apps/*/*.o    \
+	extmod/modlwip.o           \
+	extmod/moduwebsocket.o     \
+	extmod/modwebrepl.o        \
+	)
+LIBS += $(MICROPY_DIR)/drivers/cyw43/libcyw43.a
+FIRM_OBJ += $(addprefix $(BUILD)/$(MICROPY_DIR)/,\
+	sdio.o                  \
+	)
+endif
+
+ifeq ($(MICROPY_PY_NETWORK_CYW43), 1)
+FIRM_OBJ += $(addprefix $(BUILD)/$(MICROPY_DIR)/,\
+	drivers/cyw43/*.o          \
+	extmod/network_cyw43.o     \
 	)
 endif
 
@@ -588,7 +632,7 @@ $(FW_DIR):
 FIRMWARE_OBJS: | $(BUILD) $(FW_DIR)
 	$(MAKE)  -C $(CMSIS_DIR)                BUILD=$(BUILD)/$(CMSIS_DIR)    CFLAGS="$(CFLAGS) -fno-strict-aliasing -MMD"
 	$(MAKE)  -C $(STHAL_DIR)                BUILD=$(BUILD)/$(STHAL_DIR)    CFLAGS="$(CFLAGS) -MMD"
-	$(MAKE)  -C $(MICROPY_DIR)/ports/stm32  BUILD=$(BUILD)/$(MICROPY_DIR)  BOARD=$(TARGET) DEBUG=$(DEBUG) QSTR_DEFS="$(OMV_QSTR_DEFS)"
+	$(MAKE)  -C $(MICROPY_DIR)/ports/stm32  BUILD=$(BUILD)/$(MICROPY_DIR)  $(MICROPY_ARGS)
 	$(MAKE)  -C $(LEPTON_DIR)               BUILD=$(BUILD)/$(LEPTON_DIR)   CFLAGS="$(CFLAGS) -MMD"
 	$(MAKE)  -C $(MLX_DIR)                  BUILD=$(BUILD)/$(MLX_DIR)      CFLAGS="$(CFLAGS) -MMD"
 ifeq ($(MICROPY_PY_IMU), 1)
@@ -613,7 +657,7 @@ $(FIRMWARE): FIRMWARE_OBJS
 	$(CPP) -P -E -I$(OMV_BOARD_CONFIG_DIR) $(OMV_DIR)/stm32fxxx.ld.S > $(BUILD)/stm32fxxx.lds
 	$(CC) $(LDFLAGS) $(FIRM_OBJ) -o $(FW_DIR)/$(FIRMWARE).elf $(LIBS)
 	$(OBJCOPY) -Obinary $(FW_DIR)/$(FIRMWARE).elf $(FW_DIR)/$(FIRMWARE).bin
-	$(PYTHON) $(MKDFU) -b $(MAIN_APP_ADDR):$(FW_DIR)/$(FIRMWARE).bin $(FW_DIR)/$(FIRMWARE).dfu
+	$(PYTHON) $(MKDFU) -D $(DFU_DEVICE) -b $(MAIN_APP_ADDR):$(FW_DIR)/$(FIRMWARE).bin $(FW_DIR)/$(FIRMWARE).dfu
 
 # This target generates the bootloader. The bootloader binary is generated twice,
 # once without padding, to generate the bootloader.dfu file, and once with padding
@@ -622,7 +666,7 @@ $(BOOTLOADER): FIRMWARE_OBJS BOOTLOADER_OBJS
 	$(CPP) -P -E -I$(OMV_BOARD_CONFIG_DIR) $(BOOTLDR_DIR)/stm32fxxx.ld.S > $(BUILD)/$(BOOTLDR_DIR)/stm32fxxx.lds
 	$(CC) $(BOOTLDR_LDFLAGS) $(BOOT_OBJ) -o $(FW_DIR)/$(BOOTLOADER).elf
 	$(OBJCOPY) -Obinary $(FW_DIR)/$(BOOTLOADER).elf $(FW_DIR)/$(BOOTLOADER).bin
-	$(PYTHON) $(MKDFU) -b 0x08000000:$(FW_DIR)/$(BOOTLOADER).bin $(FW_DIR)/$(BOOTLOADER).dfu
+	$(PYTHON) $(MKDFU) -D $(DFU_DEVICE) -b 0x08000000:$(FW_DIR)/$(BOOTLOADER).bin $(FW_DIR)/$(BOOTLOADER).dfu
 	$(OBJCOPY) -Obinary --pad-to=$(MAIN_APP_ADDR) --gap-fill=0xFF $(FW_DIR)/$(BOOTLOADER).elf $(FW_DIR)/$(BOOTLOADER).bin
 
 # This target generates the UVC firmware.
@@ -630,12 +674,12 @@ $(UVC): FIRMWARE_OBJS UVC_OBJS
 	$(CPP) -P -E -I$(OMV_BOARD_CONFIG_DIR) $(UVC_DIR)/stm32fxxx.ld.S > $(BUILD)/$(UVC_DIR)/stm32fxxx.lds
 	$(CC) $(UVC_LDFLAGS) $(UVC_OBJ) -o $(FW_DIR)/$(UVC).elf
 	$(OBJCOPY) -Obinary $(FW_DIR)/$(UVC).elf $(FW_DIR)/$(UVC).bin
-	$(PYTHON) $(MKDFU) -b $(MAIN_APP_ADDR):$(FW_DIR)/$(UVC).bin $(FW_DIR)/$(UVC).dfu
+	$(PYTHON) $(MKDFU) -D $(DFU_DEVICE) -b $(MAIN_APP_ADDR):$(FW_DIR)/$(UVC).bin $(FW_DIR)/$(UVC).dfu
 
 # This target generates a combined bootloader+main firmware image.
 $(OPENMV): $(BOOTLOADER) $(UVC) $(FIRMWARE)
 	$(CAT) $(FW_DIR)/$(BOOTLOADER).bin $(FW_DIR)/$(FIRMWARE).bin > $(FW_DIR)/$(OPENMV).bin
-	$(PYTHON) $(MKDFU) -b 0x08000000:$(FW_DIR)/$(BOOTLOADER).bin -b $(MAIN_APP_ADDR):$(FW_DIR)/$(FIRMWARE).bin $(FW_DIR)/$(OPENMV).dfu
+	$(PYTHON) $(MKDFU) -D $(DFU_DEVICE) -b 0x08000000:$(FW_DIR)/$(BOOTLOADER).bin -b $(MAIN_APP_ADDR):$(FW_DIR)/$(FIRMWARE).bin $(FW_DIR)/$(OPENMV).dfu
 	$(SIZE) $(FW_DIR)/$(BOOTLOADER).elf
 	$(SIZE) $(FW_DIR)/$(FIRMWARE).elf
 
@@ -664,12 +708,12 @@ flash_bin::
 
 # Flash the bootloader using dfu_util
 flash_boot_dfu_util::
-	dfu-util -a 0 -d 0483:df11 -D $(FW_DIR)/$(BOOTLOADER).dfu
+	dfu-util -a 0 -d $(DFU_DEVICE) -D $(FW_DIR)/$(BOOTLOADER).dfu
 
 # Flash the main firmware image using dfu_util
 flash_image_dfu_util::
-	dfu-util -a 0 -d 0483:df11 -D $(FW_DIR)/$(FIRMWARE).dfu
+	dfu-util -a 0 -d $(DFU_DEVICE) -D $(FW_DIR)/$(FIRMWARE).dfu
 
 # Flash the bootloader + main firmware image (DFU) using dfu_util
 flash_dfu_util::
-	dfu-util -a 0 -d 0483:df11 -D $(FW_DIR)/$(OPENMV).dfu
+	dfu-util -a 0 -d $(DFU_DEVICE) -D $(FW_DIR)/$(OPENMV).dfu

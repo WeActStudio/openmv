@@ -76,6 +76,12 @@
 #include "ini.h"
 #include "omv_boardconfig.h"
 
+#if MICROPY_PY_LWIP
+#include "lwip/init.h"
+#include "lwip/apps/mdns.h"
+#include "drivers/cyw43/cyw43.h"
+#endif
+
 int errno;
 extern char _vfs_buf[];
 static fs_user_mount_t *vfs_fat = (fs_user_mount_t *) _vfs_buf;
@@ -113,9 +119,7 @@ static const char fresh_readme_txt[] =
 "https://github.com/openmv/openmv\r\n"
 ;
 
-#ifdef OPENMV1
-static const char fresh_selftest_py[] ="";
-#else
+#if (OMV_ENABLE_SELFTEST == 1)
 static const char fresh_selftest_py[] =
 "import sensor, time, pyb\n"
 "\n"
@@ -275,10 +279,12 @@ void make_flash_fs()
     f_write(&fp, fresh_readme_txt, sizeof(fresh_readme_txt) - 1 /* don't count null terminator */, &n);
     f_close(&fp);
 
+    #if (OMV_ENABLE_SELFTEST == 1)
     // Create default selftest.py
     f_open(&vfs_fat->fatfs, &fp, "/selftest.py", FA_WRITE | FA_CREATE_ALWAYS);
     f_write(&fp, fresh_selftest_py, sizeof(fresh_selftest_py) - 1 /* don't count null terminator */, &n);
     f_close(&fp);
+    #endif
 
     led_state(LED_RED, 0);
 }
@@ -393,9 +399,11 @@ FRESULT exec_boot_script(const char *path, bool selftest, bool interruptible)
         f_unlink(&vfs_fat->fatfs, path);
         storage_flush();
 
+        #ifdef OMV_SELF_TEST_SWD_ADDR
         // Set flag for SWD debugger.
         // Note: main.py does not use the frame buffer.
-        MAIN_FB()->bpp = 0xDEADBEEF;
+        OMV_SELF_TEST_SWD_ADDR = 0xDEADBEEF;
+        #endif
     }
 
     return f_res;
@@ -409,7 +417,6 @@ int main(void)
     bool sdram_pass = false;
     #endif
     #endif
-    int sensor_init_ret = 0;
     #if MICROPY_HW_ENABLE_SDCARD
     bool sdcard_mounted = false;
     #endif
@@ -495,6 +502,29 @@ soft_reset:
     sdcard_init();
     #endif
     rtc_init_start(false);
+    #if MICROPY_PY_LWIP
+    // lwIP doesn't allow to reinitialise itself by subsequent calls to this function
+    // because the system timeout list (next_timeout) is only ever reset by BSS clearing.
+    // So for now we only init the lwIP stack once on power-up.
+    if (first_soft_reset) {
+        lwip_init();
+    }
+    #if LWIP_MDNS_RESPONDER
+    mdns_resp_init();
+    #endif
+    systick_enable_dispatch(SYSTICK_DISPATCH_LWIP, mod_network_lwip_poll_wrapper);
+    #endif
+
+    #if MICROPY_PY_NETWORK_CYW43
+    {
+        cyw43_init(&cyw43_state);
+        uint8_t buf[8];
+        memcpy(&buf[0], "PYBD", 4);
+        mp_hal_get_mac_ascii(MP_HAL_MAC_WLAN0, 8, 4, (char *)&buf[4]);
+        cyw43_wifi_ap_set_ssid(&cyw43_state, 8, buf);
+        cyw43_wifi_ap_set_password(&cyw43_state, 8, (const uint8_t *)"pybd0123");
+    }
+    #endif
 
     pyb_usb_init0();
     MP_STATE_PORT(pyb_stdio_uart) = NULL;
@@ -502,9 +532,11 @@ soft_reset:
     // Initialize the sensor and check the result after
     // mounting the file-system to log errors (if any).
     if (first_soft_reset) {
-        sensor_init_ret = sensor_init();
+        sensor_init();
         #if MICROPY_PY_IMU
-        if ((!sensor_init_ret) && (sensor_get_id() == OV7690_ID)) py_imu_init();
+        if (sensor_is_detected() && sensor_get_id() == OV7690_ID) {
+            py_imu_init();
+        }
         #endif // MICROPY_PY_IMU
     }
 
@@ -518,7 +550,7 @@ soft_reset:
     if (sdcard_is_present()) {
         // Init the vfs object
         vfs_fat->blockdev.flags = 0;
-        sdcard_init_vfs(vfs_fat, 1);
+        sdcard_init_vfs(vfs_fat, 0);
 
         // Try to mount the SD card
         FRESULT res = f_mount(&vfs_fat->fatfs);
@@ -595,9 +627,11 @@ soft_reset:
         // Execute the boot.py script before initializing the USB dev to
         // override the USB mode if required, otherwise VCP+MSC is used.
         exec_boot_script("/boot.py", false, false);
+        #if (OMV_ENABLE_SELFTEST == 1)
         // Execute the selftests.py script before the filesystem is mounted
         // to avoid corrupting the filesystem when selftests.py is removed.
         exec_boot_script("/selftest.py", true, false);
+        #endif
     }
 
     // Init USB device to default setting if it was not already configured
@@ -620,13 +654,6 @@ soft_reset:
     }
     #endif
     #endif
-
-    // check sensor init result
-    if (first_soft_reset && sensor_init_ret != 0) {
-        char buf[512];
-        snprintf(buf, sizeof(buf), "Failed to init sensor, error:%d", sensor_init_ret);
-        __fatal_error(buf);
-    }
 
     // Turn boot-up LEDs off
     led_state(LED_RED, 0);

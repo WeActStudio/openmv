@@ -16,6 +16,9 @@
 #define OMV_BOARD_TYPE          "H7"
 #define OMV_UNIQUE_ID_ADDR      0x1FF1E800
 
+// Needed by the SWD JTAG testrig - located at the bottom of the frame buffer overlay stack.
+#define OMV_SELF_TEST_SWD_ADDR  *((uint32_t *) 0x24000018)
+
 // Flash sectors for the bootloader.
 // Flash FS sector, main FW sector, max sector.
 #define OMV_FLASH_LAYOUT        {1, 2, 15}
@@ -49,12 +52,21 @@
 // Enable hardware JPEG
 #define OMV_HARDWARE_JPEG       (1)
 
-// Enable MT9V034 and LEPTON sensors
+// Enable sensor drivers
+#define OMV_ENABLE_OV2640       (1)
+#define OMV_ENABLE_OV5640       (1)
+#define OMV_ENABLE_OV7690       (0)
+#define OMV_ENABLE_OV7725       (1)
+#define OMV_ENABLE_OV9650       (1)
 #define OMV_ENABLE_MT9V034      (1)
 #define OMV_ENABLE_LEPTON       (1)
+#define OMV_ENABLE_HM01B0       (0)
 
 // Enable WiFi debug
 #define OMV_ENABLE_WIFIDBG      (1)
+
+// Enable self-tests on first boot
+#define OMV_ENABLE_SELFTEST     (1)
 
 // If buffer size is bigger than this threshold, the quality is reduced.
 // This is only used for JPEG images sent to the IDE not normal compression.
@@ -100,10 +112,13 @@
 #define OMV_OSC_PLL3VCO         (RCC_PLL3VCOWIDE)
 #define OMV_OSC_PLL3FRAC        (0)
 
+// Clock Sources
+#define OMV_OSC_USB_CLKSOURCE       RCC_USBCLKSOURCE_PLL
+#define OMV_OSC_ADC_CLKSOURCE       RCC_ADCCLKSOURCE_PLL3
+#define OMV_OSC_SPI123_CLKSOURCE    RCC_SPI123CLKSOURCE_PLL3
+
 // HSE/HSI/CSI State
 #define OMV_OSC_HSE_STATE       (RCC_HSE_ON)
-#define OMV_OSC_HSI_STATE       (RCC_HSI_OFF)
-#define OMV_OSC_CSI_STATE       (RCC_CSI_OFF)
 
 // Flash Latency
 #define OMV_FLASH_LATENCY       (FLASH_LATENCY_2)
@@ -111,9 +126,9 @@
 // Linker script constants (see the linker script template stm32fxxx.ld.S).
 // Note: fb_alloc is a stack-based, dynamically allocated memory on FB.
 // The maximum available fb_alloc memory = FB_ALLOC_SIZE + FB_SIZE - (w*h*bpp).
-#define OMV_FFS_MEMORY          CCM         // Flash filesystem cache memory
+#define OMV_FFS_MEMORY          DTCM        // Flash filesystem cache memory
 #define OMV_MAIN_MEMORY         SRAM1       // data, bss and heap
-#define OMV_STACK_MEMORY        SRAM1       // stack memory
+#define OMV_STACK_MEMORY        ITCM        // stack memory
 #define OMV_DMA_MEMORY          AXI_SRAM    // DMA buffers memory.
 #define OMV_FB_MEMORY           DRAM        // Framebuffer, fb_alloc
 #define OMV_JPEG_MEMORY         DRAM        // JPEG buffer memory buffer.
@@ -124,8 +139,8 @@
 
 #define OMV_FB_SIZE             (20M)       // FB memory: header + VGA/GS image
 #define OMV_FB_ALLOC_SIZE       (11M)       // minimum fb alloc size
-#define OMV_STACK_SIZE          (15K)
-#define OMV_HEAP_SIZE           (228K)
+#define OMV_STACK_SIZE          (64K)
+#define OMV_HEAP_SIZE           (244K)
 #define OMV_SDRAM_SIZE          (32 * 1024 * 1024) // This needs to be here for UVC firmware.
 #define OMV_SDRAM_TEST          (0)
 
@@ -138,8 +153,10 @@
 #define OMV_BOOT_LENGTH         128K
 #define OMV_TEXT_ORIGIN         0x08040000
 #define OMV_TEXT_LENGTH         1792K
-#define OMV_CCM_ORIGIN          0x20000000  // Note accessible by CPU and MDMA only.
-#define OMV_CCM_LENGTH          128K
+#define OMV_DTCM_ORIGIN         0x20000000  // Note accessible by CPU and MDMA only.
+#define OMV_DTCM_LENGTH         128K
+#define OMV_ITCM_ORIGIN         0x00000000
+#define OMV_ITCM_LENGTH         64K
 #define OMV_SRAM1_ORIGIN        0x30000000
 #define OMV_SRAM1_LENGTH        256K
 #define OMV_SRAM3_ORIGIN        0x30040000
@@ -196,7 +213,7 @@
 #define DCMI_PWDN_PIN           (GPIO_PIN_7)
 #define DCMI_PWDN_PORT          (GPIOD)
 
-#define DCMI_FSYNC_PIN          (GPIO_PIN_5)
+#define DCMI_FSYNC_PIN          (GPIO_PIN_4)
 #define DCMI_FSYNC_PORT         (GPIOB)
 
 #define DCMI_D0_PIN             (GPIO_PIN_6)
@@ -280,8 +297,7 @@
 #define SOFT_I2C_SPIN_DELAY         64
 
 #define LEPTON_SPI                  (SPI3)
-#define LEPTON_SPI_AF               (GPIO_AF6_SPI3)
-// SPI1/2/3 clock source is PLL2 (160MHz/8 == 20MHz).
+// SPI1/2/3 clock source is PLL3 (160MHz/8 == 20MHz) - Minimum (164*240*8*27 = 8,501,760Hz)
 #define LEPTON_SPI_PRESCALER        (SPI_BAUDRATEPRESCALER_8)
 
 #define LEPTON_SPI_IRQn             (SPI3_IRQn)
@@ -298,6 +314,11 @@
 
 #define LEPTON_SPI_CLK_ENABLE()     __HAL_RCC_SPI3_CLK_ENABLE()
 #define LEPTON_SPI_CLK_DISABLE()    __HAL_RCC_SPI3_CLK_DISABLE()
+
+#define LEPTON_SPI_SCLK_AF          (GPIO_AF6_SPI3)
+#define LEPTON_SPI_MISO_AF          (GPIO_AF6_SPI3)
+#define LEPTON_SPI_MOSI_AF          (GPIO_AF7_SPI3)
+#define LEPTON_SPI_SSEL_AF          (GPIO_AF6_SPI3)
 
 #define LEPTON_SPI_SCLK_PIN         (GPIO_PIN_3)
 #define LEPTON_SPI_MISO_PIN         (GPIO_PIN_4)
