@@ -85,7 +85,10 @@ void usbdbg_data_in(void *buffer, int length)
         }
 
         case USBDBG_SENSOR_ID: {
-            int sensor_id = sensor_get_id();
+            int sensor_id = 0xFF;
+            if (sensor_is_detected() == true) {
+                sensor_id = sensor_get_id();
+            }
             memcpy(buffer, &sensor_id, 4);
             cmd = USBDBG_NONE;
             break;
@@ -328,6 +331,14 @@ void usbdbg_control(void *buffer, uint8_t request, uint32_t length)
             NVIC_SystemReset();
             break;
 
+        case USBDBG_SYS_RESET_TO_BL:{
+            RTC_HandleTypeDef RTCHandle;
+            RTCHandle.Instance = RTC;
+            HAL_RTCEx_BKUPWrite(&RTCHandle, RTC_BKP_DR0, 0xDF59);
+            NVIC_SystemReset();
+            break;
+        }
+        
         case USBDBG_FB_ENABLE: {
             xfer_bytes = 0;
             xfer_length = length;

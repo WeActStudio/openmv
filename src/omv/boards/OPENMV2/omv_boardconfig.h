@@ -16,6 +16,9 @@
 #define OMV_BOARD_TYPE          "M4"
 #define OMV_UNIQUE_ID_ADDR      0x1FFF7A10
 
+// Needed by the SWD JTAG testrig - located at the bottom of the frame buffer stack.
+#define OMV_SELF_TEST_SWD_ADDR  MAIN_FB()->bpp
+
 // Flash sectors for the bootloader.
 // Flash FS sector, main FW sector, max sector.
 #define OMV_FLASH_LAYOUT        {1, 4, 11}
@@ -42,6 +45,19 @@
 // RAW buffer size
 #define OMV_RAW_BUF_SIZE        (153600)
 
+// Enable sensor drivers
+#define OMV_ENABLE_OV2640       (0)
+#define OMV_ENABLE_OV5640       (0)
+#define OMV_ENABLE_OV7690       (0)
+#define OMV_ENABLE_OV7725       (1)
+#define OMV_ENABLE_OV9650       (0)
+#define OMV_ENABLE_MT9V034      (0)
+#define OMV_ENABLE_LEPTON       (0)
+#define OMV_ENABLE_HM01B0       (0)
+
+// Enable self-tests on first boot
+#define OMV_ENABLE_SELFTEST     (1)
+
 // If buffer size is bigger than this threshold, the quality is reduced.
 // This is only used for JPEG images sent to the IDE not normal compression.
 #define JPEG_QUALITY_THRESH     (160*120*2)
@@ -64,7 +80,6 @@
 
 // HSE/HSI/CSI State
 #define OMV_OSC_HSE_STATE       (RCC_HSE_ON)
-#define OMV_OSC_HSI_STATE       (RCC_HSI_OFF)
 
 // Flash Latency
 #define OMV_FLASH_LATENCY       (FLASH_LATENCY_7)
@@ -74,8 +89,8 @@
 // The maximum available fb_alloc memory = FB_ALLOC_SIZE + FB_SIZE - (w*h*bpp).
 // Note: fb_alloc overwrites the line buffer which is only used during readout.
 #define OMV_FB_MEMORY       SRAM1   // Framebuffer, fb_alloc
-#define OMV_MAIN_MEMORY     CCM     // data, bss and heap memory
-#define OMV_STACK_MEMORY    CCM     // stack memory
+#define OMV_MAIN_MEMORY     DTCM    // data, bss and heap memory
+#define OMV_STACK_MEMORY    DTCM    // stack memory
 #define OMV_DMA_MEMORY      SRAM2   // Misc DMA buffers
 
 #define OMV_FB_SIZE         (150K)  // FB memory: header + QVGA/GS image
@@ -93,8 +108,8 @@
 #define OMV_BOOT_LENGTH     16K
 #define OMV_TEXT_ORIGIN     0x08010000
 #define OMV_TEXT_LENGTH     960K
-#define OMV_CCM_ORIGIN      0x10000000
-#define OMV_CCM_LENGTH      64K
+#define OMV_DTCM_ORIGIN     0x10000000
+#define OMV_DTCM_LENGTH     64K
 #define OMV_SRAM1_ORIGIN    0x20000000
 #define OMV_SRAM1_LENGTH    163K
 #define OMV_SRAM2_ORIGIN    0x20028C00
