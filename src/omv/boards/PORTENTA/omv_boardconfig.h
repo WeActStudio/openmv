@@ -81,15 +81,15 @@
 #define OMV_OSC_PLL1M           (5)
 #define OMV_OSC_PLL1N           (160)
 #define OMV_OSC_PLL1P           (2)
-#define OMV_OSC_PLL1Q           (20)
+#define OMV_OSC_PLL1Q           (16)
 #define OMV_OSC_PLL1R           (2)
 #define OMV_OSC_PLL1VCI         (RCC_PLL1VCIRANGE_2)
 #define OMV_OSC_PLL1VCO         (RCC_PLL1VCOWIDE)
 #define OMV_OSC_PLL1FRAC        (0)
 
-// PLL2 180MHz for FMC and QSPI.
+// PLL2 200MHz for FMC and QSPI.
 #define OMV_OSC_PLL2M           (5)
-#define OMV_OSC_PLL2N           (72)
+#define OMV_OSC_PLL2N           (80)
 #define OMV_OSC_PLL2P           (2)
 #define OMV_OSC_PLL2Q           (2)
 #define OMV_OSC_PLL2R           (2)
@@ -132,11 +132,13 @@
 #define OMV_VOSPI_MEMORY        SRAM4       // VoSPI buffer memory.
 #define OMV_FB_OVERLAY_MEMORY   AXI_SRAM    // _fballoc_overlay memory.
 #define OMV_FB_OVERLAY_MEMORY_OFFSET    (480*1024)  // _fballoc_overlay
+#define OMV_CYW43_MEMORY        FLASH_EXT   // CYW43 firmware in external flash mmap'd flash.
+#define OMV_CYW43_MEMORY_OFFSET (0x90F00000)// Last Mbyte.
 
 #define OMV_FB_SIZE             (4M)       // FB memory: header + VGA/GS image
 #define OMV_FB_ALLOC_SIZE       (3M)       // minimum fb alloc size
-#define OMV_STACK_SIZE          (15K)
-#define OMV_HEAP_SIZE           (224K)
+#define OMV_STACK_SIZE          (32K)
+#define OMV_HEAP_SIZE           (212K)
 #define OMV_SDRAM_SIZE          (8 * 1024 * 1024) // This needs to be here for UVC firmware.
 #define OMV_SDRAM_TEST          (0)
 
@@ -152,15 +154,15 @@
 #define OMV_DTCM_ORIGIN         0x20000000  // Note accessible by CPU and MDMA only.
 #define OMV_DTCM_LENGTH         128K
 #define OMV_SRAM1_ORIGIN        0x30000000
-#define OMV_SRAM1_LENGTH        256K
-#define OMV_SRAM3_ORIGIN        0x30040000
-#define OMV_SRAM3_LENGTH        32K
+#define OMV_SRAM1_LENGTH        288K
 #define OMV_SRAM4_ORIGIN        0x38000000
 #define OMV_SRAM4_LENGTH        64K
 #define OMV_AXI_SRAM_ORIGIN     0x24000000
 #define OMV_AXI_SRAM_LENGTH     512K
 #define OMV_DRAM_ORIGIN         0xC0000000
 #define OMV_DRAM_LENGTH         8M
+#define OMV_FLASH_EXT_ORIGIN    0x90000000
+#define OMV_FLASH_EXT_LENGTH    16M
 #define OMV_FB_OVERLAY_MEMORY_ORIGIN    OMV_AXI_SRAM_ORIGIN
 
 // Use the MPU to set an uncacheable memory region.

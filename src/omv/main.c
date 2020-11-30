@@ -508,15 +508,15 @@ soft_reset:
     // So for now we only init the lwIP stack once on power-up.
     if (first_soft_reset) {
         lwip_init();
+        #if LWIP_MDNS_RESPONDER
+        mdns_resp_init();
+        #endif
+        systick_enable_dispatch(SYSTICK_DISPATCH_LWIP, mod_network_lwip_poll_wrapper);
     }
-    #if LWIP_MDNS_RESPONDER
-    mdns_resp_init();
-    #endif
-    systick_enable_dispatch(SYSTICK_DISPATCH_LWIP, mod_network_lwip_poll_wrapper);
     #endif
 
     #if MICROPY_PY_NETWORK_CYW43
-    {
+    if (first_soft_reset) {
         cyw43_init(&cyw43_state);
         uint8_t buf[8];
         memcpy(&buf[0], "PYBD", 4);
@@ -589,6 +589,13 @@ soft_reset:
         pyb_usb_storage_medium = PYB_USB_STORAGE_MEDIUM_FLASH;
     #if MICROPY_HW_ENABLE_SDCARD
     }
+    #if MICROPY_HW_HAS_FLASH
+    else {
+        // The storage should always be initialized on boards that have
+        // an external flash, to make sure the flash is memory-mapped.
+        storage_init();
+    }
+    #endif
     #endif
 
     // Mark FS as OpenMV disk.
@@ -716,6 +723,7 @@ soft_reset:
 
     // soft reset
     storage_flush();
+    mod_network_deinit();
     timer_deinit();
     i2c_deinit_all();
     spi_deinit_all();
