@@ -481,6 +481,7 @@ int sensor_reset()
     sensor.sde           = 0;
     sensor.pixformat     = 0;
     sensor.framesize     = 0;
+    sensor.framerate     = 0;
     sensor.gainceiling   = 0;
     sensor.hmirror       = false;
     sensor.vflip         = false;
@@ -545,16 +546,28 @@ int sensor_sleep(int enable)
 
 int sensor_shutdown(int enable)
 {
+    int ret = 0;
     dcmi_abort();
 
     if (enable) {
-        DCMI_PWDN_HIGH();
+        if (sensor.pwdn_pol == ACTIVE_HIGH) {
+            DCMI_PWDN_HIGH();
+        } else {
+            DCMI_PWDN_LOW();
+        }
+        HAL_NVIC_DisableIRQ(DCMI_IRQn);
+        HAL_DCMI_DeInit(&DCMIHandle);
     } else {
-        DCMI_PWDN_LOW();
+        if (sensor.pwdn_pol == ACTIVE_HIGH) {
+            DCMI_PWDN_LOW();
+        } else {
+            DCMI_PWDN_HIGH();
+        }
+        ret = dcmi_config(DCMI_JPEG_DISABLE);
     }
 
     systick_sleep(10);
-    return 0;
+    return ret;
 }
 
 int sensor_read_reg(uint16_t reg_addr)
@@ -654,6 +667,23 @@ int sensor_set_framesize(framesize_t framesize)
     MAIN_FB()->y = 0;
     MAIN_FB()->w = MAIN_FB()->u = resolution[framesize][0];
     MAIN_FB()->h = MAIN_FB()->v = resolution[framesize][1];
+
+    return 0;
+}
+
+int sensor_set_framerate(int framerate)
+{
+    if (sensor.framerate == framerate) {
+        // No change
+        return 0;
+    }
+
+    // Call the sensor specific function
+    if (sensor.set_framerate == NULL
+        || sensor.set_framerate(&sensor, framerate) != 0) {
+        // Operation not supported
+        return -1;
+    }
 
     return 0;
 }

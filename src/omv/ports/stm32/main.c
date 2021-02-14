@@ -523,8 +523,8 @@ soft_reset:
         #if LWIP_MDNS_RESPONDER
         mdns_resp_init();
         #endif
-        systick_enable_dispatch(SYSTICK_DISPATCH_LWIP, mod_network_lwip_poll_wrapper);
     }
+    systick_enable_dispatch(SYSTICK_DISPATCH_LWIP, mod_network_lwip_poll_wrapper);
     #endif
 
     #if MICROPY_PY_NETWORK_CYW43
@@ -721,6 +721,12 @@ soft_reset:
             }
         }
     } while (openmv_config.wifidbg == true);
+
+    #if MICROPY_PY_LWIP
+    // Must call GC sweep here to close open sockets.
+    gc_sweep_all();
+    systick_disable_dispatch(SYSTICK_DISPATCH_LWIP);
+    #endif
 
     // Disable all other IRQs except Systick and Flash IRQs
     // Note: FS IRQ is disable, since we're going for a soft-reset.
