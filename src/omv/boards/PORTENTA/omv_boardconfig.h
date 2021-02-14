@@ -118,6 +118,7 @@
 #define OMV_OSC_PLL3FRAC        (0)
 
 // Clock Sources
+#define OMV_OSC_PLL_CLKSOURCE       RCC_PLLSOURCE_HSE
 #define OMV_OSC_USB_CLKSOURCE       RCC_USBCLKSOURCE_HSI48
 #define OMV_OSC_RNG_CLKSOURCE       RCC_RNGCLKSOURCE_HSI48
 #define OMV_OSC_ADC_CLKSOURCE       RCC_ADCCLKSOURCE_PLL3
@@ -152,7 +153,7 @@
 #define OMV_FB_SIZE             (4M)       // FB memory: header + VGA/GS image
 #define OMV_FB_ALLOC_SIZE       (3M)       // minimum fb alloc size
 #define OMV_STACK_SIZE          (32K)
-#define OMV_HEAP_SIZE           (182K)
+#define OMV_HEAP_SIZE           (180K)
 #define OMV_SDRAM_SIZE          (8 * 1024 * 1024) // This needs to be here for UVC firmware.
 
 #define OMV_LINE_BUF_SIZE       (11 * 1024) // Image line buffer round(2592 * 2BPP * 2 buffers).
@@ -350,6 +351,10 @@
 #define OMV_SPI_LCD_MOSI_PIN                (GPIO_PIN_3)
 #define OMV_SPI_LCD_MOSI_PORT               (GPIOC)
 #define OMV_SPI_LCD_MOSI_ALT                (GPIO_AF5_SPI2)
+
+#define OMV_SPI_LCD_MISO_PIN                (GPIO_PIN_2)
+#define OMV_SPI_LCD_MISO_PORT               (GPIOC)
+#define OMV_SPI_LCD_MISO_ALT                (GPIO_AF5_SPI2)
 
 #define OMV_SPI_LCD_SCLK_PIN                (GPIO_PIN_1)
 #define OMV_SPI_LCD_SCLK_PORT               (GPIOI)

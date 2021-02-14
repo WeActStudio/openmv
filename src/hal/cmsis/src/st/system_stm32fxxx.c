@@ -155,6 +155,7 @@ void SystemInit(void)
 
     #if defined(MCU_SERIES_H7)
     /* Change  the switch matrix read issuing capability to 1 for the AXI SRAM target (Target 7) */
+    // See Errata 2.2.9 "Reading from AXI SRAM may lead to data read corruption"
     *((__IO uint32_t*)0x51008108) = 0x00000001;
     #endif // defined(MCU_SERIES_H7)
 
@@ -218,6 +219,9 @@ void SystemClock_Config(void)
     }
     #endif
 
+    /* Macro to configure the PLL clock source */
+    __HAL_RCC_PLL_PLLSOURCE_CONFIG(OMV_OSC_PLL_CLKSOURCE);
+
     /* Enable HSE Oscillator and activate PLL with HSE as source */
     #if defined(OMV_OSC_HSE_STATE)
     RCC_OscInitStruct.HSEState = OMV_OSC_HSE_STATE;
@@ -226,6 +230,7 @@ void SystemClock_Config(void)
     #if defined(OMV_OSC_HSI_STATE)
     RCC_OscInitStruct.HSIState = OMV_OSC_HSI_STATE;
     RCC_OscInitStruct.OscillatorType |= RCC_OSCILLATORTYPE_HSI;
+    RCC_OscInitStruct.HSICalibrationValue = RCC_HSICALIBRATION_DEFAULT;
     #endif
     #if defined(OMV_OSC_CSI_STATE)
     RCC_OscInitStruct.CSIState = OMV_OSC_CSI_STATE;
@@ -237,7 +242,7 @@ void SystemClock_Config(void)
     #endif
 
     RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
-    RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSE;
+    RCC_OscInitStruct.PLL.PLLSource = OMV_OSC_PLL_CLKSOURCE;
     RCC_OscInitStruct.PLL.PLLM = OMV_OSC_PLL1M;
     RCC_OscInitStruct.PLL.PLLN = OMV_OSC_PLL1N;
     RCC_OscInitStruct.PLL.PLLQ = OMV_OSC_PLL1Q;

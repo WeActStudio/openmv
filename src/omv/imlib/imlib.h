@@ -274,25 +274,37 @@ color_thresholds_list_lnk_data_t;
     (__rb_pixel * 0x0801) + ((__pixel << 3) & 0x7E0); \
 })
 
-extern const int8_t lab_table[196608];
+#define COLOR_RGB888_TO_U(r8, g8, b8) ((((r8) * -21) - ((g8) * 43) + ((b8) * 64)) >> 7) // -0.168736R - 0.331264G + 0.5B
+#define COLOR_RGB565_TO_U(rgb565) \
+({ \
+    __typeof__ (rgb565) __rgb565 = (rgb565); \
+    int r = COLOR_RGB565_TO_R8(__rgb565); \
+    int g = COLOR_RGB565_TO_G8(__rgb565); \
+    int b = COLOR_RGB565_TO_B8(__rgb565); \
+    COLOR_RGB888_TO_U(r, g, b); \
+})
+
+#define COLOR_RGB888_TO_V(r8, g8, b8) ((((r8) * 64) - ((g8) * 54) - ((b8) * 10)) >> 7) // 0.5R - 0.418688G - 0.081312B
+#define COLOR_RGB565_TO_V(rgb565) \
+({ \
+    __typeof__ (rgb565) __rgb565 = (rgb565); \
+    int r = COLOR_RGB565_TO_R8(__rgb565); \
+    int g = COLOR_RGB565_TO_G8(__rgb565); \
+    int b = COLOR_RGB565_TO_B8(__rgb565); \
+    COLOR_RGB888_TO_V(r, g, b); \
+})
+
+extern const int8_t lab_table[196608/2];
 extern const int8_t yuv_table[196608];
 
 #ifdef IMLIB_ENABLE_LAB_LUT
-#define COLOR_RGB565_TO_L(pixel) lab_table[(pixel) * 3]
-#define COLOR_RGB565_TO_A(pixel) lab_table[((pixel) * 3) + 1]
-#define COLOR_RGB565_TO_B(pixel) lab_table[((pixel) * 3) + 2]
+#define COLOR_RGB565_TO_L(pixel) lab_table[((pixel>>1) * 3) + 0]
+#define COLOR_RGB565_TO_A(pixel) lab_table[((pixel>>1) * 3) + 1]
+#define COLOR_RGB565_TO_B(pixel) lab_table[((pixel>>1) * 3) + 2]
 #else
 #define COLOR_RGB565_TO_L(pixel) imlib_rgb565_to_l(pixel)
 #define COLOR_RGB565_TO_A(pixel) imlib_rgb565_to_a(pixel)
 #define COLOR_RGB565_TO_B(pixel) imlib_rgb565_to_b(pixel)
-#endif
-
-#ifdef IMLIB_ENABLE_YUV_LUT
-#define COLOR_RGB565_TO_U(pixel) yuv_table[((pixel) * 3) + 1]
-#define COLOR_RGB565_TO_V(pixel) yuv_table[((pixel) * 3) + 2]
-#else
-#define COLOR_RGB565_TO_U(pixel) imlib_rgb565_to_u(pixel)
-#define COLOR_RGB565_TO_V(pixel) imlib_rgb565_to_v(pixel)
 #endif
 
 #define COLOR_LAB_TO_RGB565(l, a, b) imlib_lab_to_rgb(l, a, b)
@@ -596,15 +608,15 @@ extern const int kernel_high_pass_3[9];
 
 #define IM_RGB5652L(p) \
     ({ __typeof__ (p) _p = (p); \
-       lab_table[_p * 3]; })
+       lab_table[((_p>>1) * 3) + 0]; })
 
 #define IM_RGB5652A(p) \
     ({ __typeof__ (p) _p = (p); \
-       lab_table[(_p * 3) + 1]; })
+       lab_table[((_p>>1) * 3) + 1]; })
 
 #define IM_RGB5652B(p) \
     ({ __typeof__ (p) _p = (p); \
-       lab_table[(_p * 3) + 2]; })
+       lab_table[((_p>>1) * 3) + 2]; })
 
 // Grayscale maxes
 #define IM_MAX_GS (255)
@@ -1039,9 +1051,6 @@ void imlib_fill_image_from_float(image_t *img, int w, int h, float *data, float 
 int8_t imlib_rgb565_to_l(uint16_t pixel);
 int8_t imlib_rgb565_to_a(uint16_t pixel);
 int8_t imlib_rgb565_to_b(uint16_t pixel);
-int8_t imlib_rgb565_to_y(uint16_t pixel);
-int8_t imlib_rgb565_to_u(uint16_t pixel);
-int8_t imlib_rgb565_to_v(uint16_t pixel);
 uint16_t imlib_lab_to_rgb(uint8_t l, int8_t a, int8_t b);
 uint16_t imlib_yuv_to_rgb(uint8_t y, int8_t u, int8_t v);
 void imlib_bayer_to_rgb565(image_t *img, int w, int h, int xoffs, int yoffs, uint16_t *rgbbuf);

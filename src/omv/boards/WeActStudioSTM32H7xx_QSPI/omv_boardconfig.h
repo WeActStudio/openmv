@@ -15,6 +15,7 @@
 #define OMV_ARCH_STR            "WeAct H7xx 1024" // 33 chars max
 #define OMV_BOARD_TYPE          "H7"
 #define OMV_UNIQUE_ID_ADDR      0x1FF1E800
+#define OMV_UNIQUE_ID_SIZE      3 // 3 words
 
 // Needed by the SWD JTAG testrig - located at the bottom of the frame buffer stack.
 #define OMV_SELF_TEST_SWD_ADDR  MAIN_FB()->bpp
@@ -125,6 +126,7 @@
 #define OMV_OSC_PLL3FRAC        (0)
 
 // Clock Sources
+#define OMV_OSC_PLL_CLKSOURCE       RCC_PLLSOURCE_HSE
 #define OMV_OSC_USB_CLKSOURCE       RCC_USBCLKSOURCE_HSI48
 #define OMV_OSC_RNG_CLKSOURCE       RCC_RNGCLKSOURCE_HSI48
 #define OMV_OSC_ADC_CLKSOURCE       RCC_ADCCLKSOURCE_PLL3
@@ -380,6 +382,10 @@
 #define OMV_SPI_LCD_MOSI_PORT               (GPIOE)
 #define OMV_SPI_LCD_MOSI_ALT                (GPIO_AF5_SPI4)
 
+#define OMV_SPI_LCD_MISO_PIN                (GPIO_PIN_13)
+#define OMV_SPI_LCD_MISO_PORT               (GPIOE)
+#define OMV_SPI_LCD_MISO_ALT                (GPIO_AF5_SPI4)
+
 #define OMV_SPI_LCD_SCLK_PIN                (GPIO_PIN_12)
 #define OMV_SPI_LCD_SCLK_PORT               (GPIOE)
 #define OMV_SPI_LCD_SCLK_ALT                (GPIO_AF5_SPI4)
@@ -403,6 +409,36 @@
 #define OMV_SPI_LCD_BL_PORT                 (GPIOE)
 #define OMV_SPI_LCD_BL_ON()                 HAL_GPIO_WritePin(OMV_SPI_LCD_BL_PORT, OMV_SPI_LCD_BL_PIN, GPIO_PIN_RESET)
 #define OMV_SPI_LCD_BL_OFF()                HAL_GPIO_WritePin(OMV_SPI_LCD_BL_PORT, OMV_SPI_LCD_BL_PIN, GPIO_PIN_SET)
+
+// FIR Module
+#define OMV_ENABLE_FIR_MLX90621             (1)
+#define OMV_ENABLE_FIR_MLX90640             (1)
+#define OMV_ENABLE_FIR_MLX90641             (0)
+#define OMV_ENABLE_FIR_AMG8833              (1)
+#define OMV_ENABLE_FIR_LEPTON               (1)
+
+// FIR Lepton
+#define OMV_FIR_LEPTON_I2C_BUS              (FIR_I2C_ID)
+#define OMV_FIR_LEPTON_I2C_BUS_SPEED        (FIR_I2C_SPEED)
+#define OMV_FIR_LEPTON_CONTROLLER           (&spi_obj[1])
+#define OMV_FIR_LEPTON_CONTROLLER_INSTANCE  (SPI2)
+
+#define OMV_FIR_LEPTON_MOSI_PIN             (GPIO_PIN_15)
+#define OMV_FIR_LEPTON_MOSI_PORT            (GPIOB)
+#define OMV_FIR_LEPTON_MOSI_ALT             (GPIO_AF5_SPI2)
+
+#define OMV_FIR_LEPTON_MISO_PIN             (GPIO_PIN_14)
+#define OMV_FIR_LEPTON_MISO_PORT            (GPIOB)
+#define OMV_FIR_LEPTON_MISO_ALT             (GPIO_AF5_SPI2)
+
+#define OMV_FIR_LEPTON_SCLK_PIN             (GPIO_PIN_13)
+#define OMV_FIR_LEPTON_SCLK_PORT            (GPIOB)
+#define OMV_FIR_LEPTON_SCLK_ALT             (GPIO_AF5_SPI2)
+
+#define OMV_FIR_LEPTON_CS_PIN               (GPIO_PIN_12)
+#define OMV_FIR_LEPTON_CS_PORT              (GPIOB)
+#define OMV_FIR_LEPTON_CS_HIGH()            HAL_GPIO_WritePin(OMV_FIR_LEPTON_CS_PORT, OMV_FIR_LEPTON_CS_PIN, GPIO_PIN_SET)
+#define OMV_FIR_LEPTON_CS_LOW()             HAL_GPIO_WritePin(OMV_FIR_LEPTON_CS_PORT, OMV_FIR_LEPTON_CS_PIN, GPIO_PIN_RESET)
 
 // QSPI flash configuration for the bootloader.
 #define QSPIF_SIZE_BITS             (23)        // 2**23 == 8MBytes.

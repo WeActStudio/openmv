@@ -120,6 +120,7 @@
 #define OMV_OSC_PLL3FRAC        (0)
 
 // Clock Sources
+#define OMV_OSC_PLL_CLKSOURCE       RCC_PLLSOURCE_HSE
 #define OMV_OSC_USB_CLKSOURCE       RCC_USBCLKSOURCE_PLL
 #define OMV_OSC_RNG_CLKSOURCE       RCC_RNGCLKSOURCE_HSI48
 #define OMV_OSC_ADC_CLKSOURCE       RCC_ADCCLKSOURCE_PLL3
@@ -401,6 +402,10 @@
 #define OMV_SPI_LCD_MOSI_PIN                (GPIO_PIN_15)
 #define OMV_SPI_LCD_MOSI_PORT               (GPIOB)
 #define OMV_SPI_LCD_MOSI_ALT                (GPIO_AF5_SPI2)
+
+#define OMV_SPI_LCD_MISO_PIN                (GPIO_PIN_14)
+#define OMV_SPI_LCD_MISO_PORT               (GPIOB)
+#define OMV_SPI_LCD_MISO_ALT                (GPIO_AF5_SPI2)
 
 #define OMV_SPI_LCD_SCLK_PIN                (GPIO_PIN_13)
 #define OMV_SPI_LCD_SCLK_PORT               (GPIOB)

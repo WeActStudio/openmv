@@ -1,5 +1,33 @@
 # Change Log
-## [3.9.0](https://github.com/openmv/openmv/releases/tag/v3.9.0) (2020-01-13)
+## [3.9.3](https://github.com/openmv/openmv/releases/tag/v3.9.3) (2021-02-13)
+* Fix issues with Portenta WiFi.
+* Fix JPEG Binary image compression.
+* Fix rgb_channel_extraction grayscale selection for TV.
+* Fix FLIR FFC with a timeout.
+* Add initial support for Bormio.
+* Add Portenta WiFi examples.
+* Update LWIP.
+
+## [3.9.2](https://github.com/openmv/openmv/releases/tag/v3.9.2) (2021-02-01)
+* Fix ImageIO RGB565 bug.
+* Update Portenta LoRa library.
+* Fix IDMA/DMA2 bus contention bug on newer cams.
+* Fix external Lepton driver on F4 and F7.
+* Fix issues with F7 LCD triple buffering.
+* Improve STOP mode power consumption.
+* Improve TV driver resolution, add scaling, and triple buffering
+
+## [3.9.1](https://github.com/openmv/openmv/releases/tag/v3.9.1) (2021-01-22)
+* Update ulab to 2.1.3
+* Add Portenta LoRa library.
+* Add set_framerate to sensor module.
+* Enable exFAT for Portenta.
+* Update HM01B0 sensor driver.
+* Improve low-power modes on QSPI boards.
+* Reduced firmware image size.
+* Faster firmware build.
+
+## [3.9.0](https://github.com/openmv/openmv/releases/tag/v3.9.0) (2021-01-13)
 * Fix H7 timer bug in new HAL. 
 * Fix pyb_spi bug from upstream.
 * Fix OV5640 PCLK calculation.

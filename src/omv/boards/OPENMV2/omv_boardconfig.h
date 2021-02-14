@@ -88,6 +88,9 @@
 // HSE/HSI/CSI State
 #define OMV_OSC_HSE_STATE       (RCC_HSE_ON)
 
+// Clock Sources
+#define OMV_OSC_PLL_CLKSOURCE   RCC_PLLSOURCE_HSE
+
 // Flash Latency
 #define OMV_FLASH_LATENCY       (FLASH_LATENCY_7)
 
@@ -248,6 +251,10 @@
 #define OMV_SPI_LCD_MOSI_PORT               (GPIOB)
 #define OMV_SPI_LCD_MOSI_ALT                (GPIO_AF5_SPI2)
 
+#define OMV_SPI_LCD_MISO_PIN                (GPIO_PIN_14)
+#define OMV_SPI_LCD_MISO_PORT               (GPIOB)
+#define OMV_SPI_LCD_MISO_ALT                (GPIO_AF5_SPI2)
+
 #define OMV_SPI_LCD_SCLK_PIN                (GPIO_PIN_13)
 #define OMV_SPI_LCD_SCLK_PORT               (GPIOB)
 #define OMV_SPI_LCD_SCLK_ALT                (GPIO_AF5_SPI2)
@@ -282,7 +289,7 @@
 // FIR Module
 #define OMV_ENABLE_FIR_MLX90621             (1)
 #define OMV_ENABLE_FIR_MLX90640             (1)
-#define OMV_ENABLE_FIR_MLX90641             (0)
+#define OMV_ENABLE_FIR_MLX90641             (1)
 #define OMV_ENABLE_FIR_AMG8833              (1)
 #define OMV_ENABLE_FIR_LEPTON               (1)
 

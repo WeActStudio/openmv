@@ -644,6 +644,7 @@ static const uint8_t saturation_regs[NUM_SATURATION_LEVELS][6] = {
 
 static int reset(sensor_t *sensor)
 {
+    int ret = 0;
     readout_x = 0;
     readout_y = 0;
 
@@ -653,7 +654,7 @@ static int reset(sensor_t *sensor)
     hts_target = 0;
 
     // Reset all registers
-    int ret = cambus_writeb2(&sensor->bus, sensor->slv_addr, SCCB_SYSTEM_CTRL_1, 0x11);
+    ret |= cambus_writeb2(&sensor->bus, sensor->slv_addr, SCCB_SYSTEM_CTRL_1, 0x11);
     ret |= cambus_writeb2(&sensor->bus, sensor->slv_addr, SYSTEM_CTROL0, 0x82);
 
     // Delay 5 ms
@@ -696,15 +697,13 @@ static int reset(sensor_t *sensor)
 static int sleep(sensor_t *sensor, int enable)
 {
     uint8_t reg;
-    int ret = cambus_readb2(&sensor->bus, sensor->slv_addr, SYSTEM_CTROL0, &reg);
-
     if (enable) {
-        reg |= 0x40;
+        reg = 0x42;
     } else {
-        reg &= ~0x40;
+        reg = 0x02;
     }
 
-    return cambus_writeb2(&sensor->bus, sensor->slv_addr, SYSTEM_CTROL0, reg) | ret;
+    return cambus_writeb2(&sensor->bus, sensor->slv_addr, SYSTEM_CTROL0, reg);
 }
 
 static int read_reg(sensor_t *sensor, uint16_t reg_addr)
