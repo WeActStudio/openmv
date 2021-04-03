@@ -55,18 +55,14 @@ static DMA_HandleTypeDef fir_lepton_spi_rx_dma = {};
 #define VOSPI_SEG_SIZE_PIXELS   (VOSPI_PIDS_PER_SEG * VOSPI_PID_SIZE_PIXELS) // 16-bits
 
 #define VOSPI_BUFFER_SIZE       (VOSPI_PACKET_SIZE * 2) // 16-bits
-#if defined(MCU_SERIES_H7)
-#define VOSPI_CLOCK_SPEED       10000000 // hz
-#else
 #define VOSPI_CLOCK_SPEED       20000000 // hz
-#endif
 #define VOSPI_SYNC_MS           200 // ms
 
 static soft_timer_entry_t flir_lepton_spi_rx_timer = {};
 static int fir_lepton_spi_rx_cb_head = 0;
 static int fir_lepton_spi_rx_cb_expected_pid = 0;
 static int fir_lepton_spi_rx_cb_expected_seg = 0;
-static uint16_t *fir_lepton_spi_rx_cb_dma_buffer = NULL;
+extern int _fir_lepton_buf[];
 
 STATIC mp_obj_t fir_lepton_spi_resync_callback(mp_obj_t unused)
 {
@@ -79,7 +75,7 @@ STATIC mp_obj_t fir_lepton_spi_resync_callback(mp_obj_t unused)
 
     OMV_FIR_LEPTON_CS_LOW();
     HAL_SPI_Receive_DMA(OMV_FIR_LEPTON_CONTROLLER->spi,
-            (uint8_t *) fir_lepton_spi_rx_cb_dma_buffer,
+            (uint8_t *) &_fir_lepton_buf,
             VOSPI_BUFFER_SIZE);
 
     return mp_const_none;
@@ -119,10 +115,6 @@ static mp_obj_t fir_lepton_frame_cb = mp_const_none;
 
 void fir_lepton_spi_callback(const uint16_t *base)
 {
-    #if defined(MCU_SERIES_F7) || defined(MCU_SERIES_H7)
-    SCB_InvalidateDCache_by_Addr((uint32_t *) base, VOSPI_PACKET_SIZE * sizeof(uint16_t));
-    #endif
-
     int id = base[0];
 
     // Ignore don't care packets.
@@ -202,12 +194,12 @@ void fir_lepton_spi_callback(const uint16_t *base)
 
 static void fir_lepton_spi_callback_half(SPI_HandleTypeDef *hspi)
 {
-    fir_lepton_spi_callback(fir_lepton_spi_rx_cb_dma_buffer);
+    fir_lepton_spi_callback((uint16_t *) &_fir_lepton_buf);
 }
 
 static void fir_lepton_spi_callback_full(SPI_HandleTypeDef *hspi)
 {
-    fir_lepton_spi_callback(fir_lepton_spi_rx_cb_dma_buffer + VOSPI_PACKET_SIZE);
+    fir_lepton_spi_callback(((uint16_t *) &_fir_lepton_buf) + VOSPI_PACKET_SIZE);
 }
 
 #if defined(OMV_FIR_LEPTON_VSYNC_PRESENT)
@@ -328,17 +320,21 @@ int fir_lepton_init(cambus_t *bus, int *w, int *h, int *refresh, int *resolution
     HAL_GPIO_Init(OMV_FIR_LEPTON_MCLK_PORT, &GPIO_InitStructure);
 
     fir_lepton_mclk_tim_handle.Instance = OMV_FIR_LEPTON_MCLK_TIM;
-    fir_lepton_mclk_tim_handle.Init.Period = period;
-    fir_lepton_mclk_tim_handle.Init.Prescaler = TIM_ETRPRESCALER_DIV1;
+    fir_lepton_mclk_tim_handle.Init.Prescaler = 0;
     fir_lepton_mclk_tim_handle.Init.CounterMode = TIM_COUNTERMODE_UP;
+    fir_lepton_mclk_tim_handle.Init.Period = period;
     fir_lepton_mclk_tim_handle.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+    fir_lepton_mclk_tim_handle.Init.RepetitionCounter = 0;
+    fir_lepton_mclk_tim_handle.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
 
     TIM_OC_InitTypeDef fir_lepton_mclk_tim_oc_handle;
     fir_lepton_mclk_tim_oc_handle.Pulse = period / 2;
     fir_lepton_mclk_tim_oc_handle.OCMode = TIM_OCMODE_PWM1;
     fir_lepton_mclk_tim_oc_handle.OCPolarity = TIM_OCPOLARITY_HIGH;
+    fir_lepton_mclk_tim_oc_handle.OCNPolarity = TIM_OCNPOLARITY_HIGH;
     fir_lepton_mclk_tim_oc_handle.OCFastMode = TIM_OCFAST_DISABLE;
     fir_lepton_mclk_tim_oc_handle.OCIdleState = TIM_OCIDLESTATE_RESET;
+    fir_lepton_mclk_tim_oc_handle.OCNIdleState = TIM_OCNIDLESTATE_RESET;
 
     OMV_FIR_LEPTON_MCLK_TIM_CLK_ENABLE();
     HAL_TIM_PWM_Init(&fir_lepton_mclk_tim_handle);
@@ -455,23 +451,6 @@ int fir_lepton_init(cambus_t *bus, int *w, int *h, int *refresh, int *resolution
                                                  FB_ALLOC_NO_HINT);
     }
 
-    size_t size = VOSPI_BUFFER_SIZE * sizeof(uint16_t);
-
-    // The DMA buffer must not start/end partially on a cache line.
-    #if defined(MCU_SERIES_F7) || defined(MCU_SERIES_H7)
-    size = ((size + __SCB_DCACHE_LINE_SIZE - 1) / __SCB_DCACHE_LINE_SIZE) * __SCB_DCACHE_LINE_SIZE;
-    size += __SCB_DCACHE_LINE_SIZE;
-    #endif
-
-    fir_lepton_spi_rx_cb_dma_buffer = (uint16_t *) fb_alloc(size, FB_ALLOC_PREFER_SPEED);
-
-    #if defined(MCU_SERIES_F7) || defined(MCU_SERIES_H7)
-    int offset = ((uint32_t) fir_lepton_spi_rx_cb_dma_buffer) % __SCB_DCACHE_LINE_SIZE;
-    if (offset) {
-        fir_lepton_spi_rx_cb_dma_buffer += __SCB_DCACHE_LINE_SIZE - offset;
-    }
-    #endif
-
     dma_init(&fir_lepton_spi_rx_dma,
              OMV_FIR_LEPTON_CONTROLLER->rx_dma_descr,
              DMA_PERIPH_TO_MEMORY,
@@ -486,13 +465,13 @@ int fir_lepton_init(cambus_t *bus, int *w, int *h, int *refresh, int *resolution
     fir_lepton_spi_rx_dma.Init.PeriphDataAlignment = DMA_PDATAALIGN_HALFWORD;
     #endif
 
-    #if defined(MCU_SERIES_H7)
     fir_lepton_spi_rx_dma.Init.MemDataAlignment = DMA_MDATAALIGN_WORD;
-    #else
-    fir_lepton_spi_rx_dma.Init.MemDataAlignment = DMA_MDATAALIGN_HALFWORD;
-    #endif
 
     fir_lepton_spi_rx_dma.Init.Mode = DMA_CIRCULAR;
+    fir_lepton_spi_rx_dma.Init.FIFOMode = DMA_FIFOMODE_ENABLE;
+    fir_lepton_spi_rx_dma.Init.FIFOThreshold = DMA_FIFO_THRESHOLD_1QUARTERFULL;
+    fir_lepton_spi_rx_dma.Init.MemBurst = DMA_MBURST_SINGLE;
+    fir_lepton_spi_rx_dma.Init.PeriphBurst = DMA_PBURST_SINGLE;
 
     ((DMA_Stream_TypeDef *) fir_lepton_spi_rx_dma.Instance)->CR =
         (((DMA_Stream_TypeDef *) fir_lepton_spi_rx_dma.Instance)->CR & ~DMA_SxCR_PSIZE_Msk) |
@@ -504,15 +483,27 @@ int fir_lepton_init(cambus_t *bus, int *w, int *h, int *refresh, int *resolution
 
     ((DMA_Stream_TypeDef *) fir_lepton_spi_rx_dma.Instance)->CR =
         (((DMA_Stream_TypeDef *) fir_lepton_spi_rx_dma.Instance)->CR & ~DMA_SxCR_MSIZE_Msk) |
-        #if defined(MCU_SERIES_H7)
         DMA_MDATAALIGN_WORD;
-        #else
-        DMA_MDATAALIGN_HALFWORD;
-        #endif
 
     ((DMA_Stream_TypeDef *) fir_lepton_spi_rx_dma.Instance)->CR =
         (((DMA_Stream_TypeDef *) fir_lepton_spi_rx_dma.Instance)->CR & ~DMA_SxCR_CIRC_Msk) |
         DMA_CIRCULAR;
+
+    ((DMA_Stream_TypeDef *) fir_lepton_spi_rx_dma.Instance)->FCR =
+        (((DMA_Stream_TypeDef *) fir_lepton_spi_rx_dma.Instance)->FCR & ~DMA_SxFCR_DMDIS_Msk) |
+        DMA_FIFOMODE_ENABLE;
+
+    ((DMA_Stream_TypeDef *) fir_lepton_spi_rx_dma.Instance)->FCR =
+        (((DMA_Stream_TypeDef *) fir_lepton_spi_rx_dma.Instance)->FCR & ~DMA_SxFCR_FTH_Msk) |
+        DMA_FIFO_THRESHOLD_1QUARTERFULL;
+
+    ((DMA_Stream_TypeDef *) fir_lepton_spi_rx_dma.Instance)->CR =
+        (((DMA_Stream_TypeDef *) fir_lepton_spi_rx_dma.Instance)->CR & ~DMA_SxCR_MBURST_Msk) |
+        DMA_MBURST_SINGLE;
+
+    ((DMA_Stream_TypeDef *) fir_lepton_spi_rx_dma.Instance)->CR =
+        (((DMA_Stream_TypeDef *) fir_lepton_spi_rx_dma.Instance)->CR & ~DMA_SxCR_PBURST_Msk) |
+        DMA_PBURST_SINGLE;
 
     fb_alloc_mark_permanent();
     fir_lepton_spi_resync();

@@ -1,7 +1,7 @@
 # This file is part of the OpenMV project.
 #
-# Copyright (c) 2013-2019 Ibrahim Abdelkader <iabdalkader@openmv.io>
-# Copyright (c) 2013-2019 Kwabena W. Agyeman <kwagyeman@openmv.io>
+# Copyright (c) 2013-2021 Ibrahim Abdelkader <iabdalkader@openmv.io>
+# Copyright (c) 2013-2021 Kwabena W. Agyeman <kwagyeman@openmv.io>
 #
 # This work is licensed under the MIT license, see the file LICENSE for details.
 #
@@ -11,6 +11,7 @@ SRCS += $(addprefix alloc/,     \
 	xalloc.c                    \
 	fb_alloc.c                  \
 	umm_malloc.c                \
+	dma_alloc.c                 \
 	unaligned_memcpy.c          \
    )
 
@@ -27,6 +28,7 @@ SRCS += $(addprefix common/,    \
 SRCS += $(addprefix sensors/,   \
 	ov2640.c                    \
 	ov5640.c                    \
+	ov7670.c                    \
 	ov7690.c                    \
 	ov7725.c                    \
 	ov9650.c                    \

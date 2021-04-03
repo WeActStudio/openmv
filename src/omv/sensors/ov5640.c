@@ -1,8 +1,8 @@
 /*
  * This file is part of the OpenMV project.
  *
- * Copyright (c) 2013-2019 Ibrahim Abdelkader <iabdalkader@openmv.io>
- * Copyright (c) 2013-2019 Kwabena W. Agyeman <kwagyeman@openmv.io>
+ * Copyright (c) 2013-2021 Ibrahim Abdelkader <iabdalkader@openmv.io>
+ * Copyright (c) 2013-2021 Kwabena W. Agyeman <kwagyeman@openmv.io>
  *
  * This work is licensed under the MIT license, see the file LICENSE for details.
  *
@@ -677,7 +677,7 @@ static int reset(sensor_t *sensor)
     ret |= cambus_writeb2(&sensor->bus, sensor->slv_addr, SYSTEM_RESET_00, 0x20); // force mcu reset
 
     // Write firmware
-    uint16_t fw_addr = MCU_FIRMWARE_BASE;
+    uint16_t fw_addr = __REV16(MCU_FIRMWARE_BASE);
     ret |= cambus_write_bytes(&sensor->bus, sensor->slv_addr, (uint8_t *) &fw_addr, 2, CAMBUS_XFER_SUSPEND);
     ret |= cambus_write_bytes(&sensor->bus, sensor->slv_addr, (uint8_t *) af_firmware_regs, sizeof(af_firmware_regs), CAMBUS_XFER_NO_FLAGS);
 

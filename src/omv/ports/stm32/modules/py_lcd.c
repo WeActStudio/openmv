@@ -1,8 +1,8 @@
 /*
  * This file is part of the OpenMV project.
  *
- * Copyright (c) 2013-2019 Ibrahim Abdelkader <iabdalkader@openmv.io>
- * Copyright (c) 2013-2019 Kwabena W. Agyeman <kwagyeman@openmv.io>
+ * Copyright (c) 2013-2021 Ibrahim Abdelkader <iabdalkader@openmv.io>
+ * Copyright (c) 2013-2021 Kwabena W. Agyeman <kwagyeman@openmv.io>
  *
  * This work is licensed under the MIT license, see the file LICENSE for details.
  *
@@ -21,6 +21,8 @@
 #include "extmod/machine_i2c.h"
 #include "omv_boardconfig.h"
 #include STM32_HAL_H
+
+#if MICROPY_PY_LCD
 
 #define FRAMEBUFFER_COUNT 3
 static int framebuffer_head = 0;
@@ -352,16 +354,48 @@ static void spi_config_init(int w, int h, int refresh_rate, bool triple_buffer, 
         framebuffer_tail = 0;
 
         for (int i = 0; i < FRAMEBUFFER_COUNT; i++) {
-            framebuffers[i] = (uint16_t *) fb_alloc0(w * h * sizeof(uint16_t), FB_ALLOC_NO_HINT);
+            framebuffers[i] = (uint16_t *) fb_alloc0(w * h * sizeof(uint16_t), FB_ALLOC_CACHE_ALIGN);
         }
 
         dma_init(&spi_tx_dma, OMV_SPI_LCD_CONTROLLER->tx_dma_descr, DMA_MEMORY_TO_PERIPH, OMV_SPI_LCD_CONTROLLER->spi);
         OMV_SPI_LCD_CONTROLLER->spi->hdmatx = &spi_tx_dma;
         OMV_SPI_LCD_CONTROLLER->spi->hdmarx = NULL;
+#if defined(MCU_SERIES_H7)
+        spi_tx_dma.Init.PeriphDataAlignment = DMA_PDATAALIGN_WORD;
+#else
         spi_tx_dma.Init.PeriphDataAlignment = DMA_PDATAALIGN_HALFWORD;
-        spi_tx_dma.Init.MemDataAlignment = DMA_MDATAALIGN_HALFWORD;
-        ((DMA_Stream_TypeDef *) spi_tx_dma.Instance)->CR = (((DMA_Stream_TypeDef *) spi_tx_dma.Instance)->CR & ~DMA_SxCR_PSIZE_Msk) | DMA_PDATAALIGN_HALFWORD;
-        ((DMA_Stream_TypeDef *) spi_tx_dma.Instance)->CR = (((DMA_Stream_TypeDef *) spi_tx_dma.Instance)->CR & ~DMA_SxCR_MSIZE_Msk) | DMA_MDATAALIGN_HALFWORD;
+#endif
+        spi_tx_dma.Init.MemDataAlignment = DMA_MDATAALIGN_WORD;
+        spi_tx_dma.Init.FIFOMode = DMA_FIFOMODE_ENABLE;
+        spi_tx_dma.Init.FIFOThreshold = DMA_FIFO_THRESHOLD_FULL;
+        spi_tx_dma.Init.MemBurst = DMA_MBURST_INC4;
+#if defined(MCU_SERIES_H7)
+        spi_tx_dma.Init.PeriphBurst = DMA_PBURST_INC4;
+#else
+        spi_tx_dma.Init.PeriphBurst = DMA_PBURST_SINGLE;
+#endif
+#if defined(MCU_SERIES_H7)
+        ((DMA_Stream_TypeDef *) spi_tx_dma.Instance)->CR =
+                (((DMA_Stream_TypeDef *) spi_tx_dma.Instance)->CR & ~DMA_SxCR_PSIZE_Msk) | DMA_PDATAALIGN_WORD;
+#else
+        ((DMA_Stream_TypeDef *) spi_tx_dma.Instance)->CR =
+                (((DMA_Stream_TypeDef *) spi_tx_dma.Instance)->CR & ~DMA_SxCR_PSIZE_Msk) | DMA_PDATAALIGN_HALFWORD;
+#endif
+        ((DMA_Stream_TypeDef *) spi_tx_dma.Instance)->CR =
+            (((DMA_Stream_TypeDef *) spi_tx_dma.Instance)->CR & ~DMA_SxCR_MSIZE_Msk) | DMA_MDATAALIGN_WORD;
+        ((DMA_Stream_TypeDef *) spi_tx_dma.Instance)->FCR =
+            (((DMA_Stream_TypeDef *) spi_tx_dma.Instance)->FCR & ~DMA_SxFCR_DMDIS_Msk) | DMA_FIFOMODE_ENABLE;
+        ((DMA_Stream_TypeDef *) spi_tx_dma.Instance)->FCR =
+            (((DMA_Stream_TypeDef *) spi_tx_dma.Instance)->FCR & ~DMA_SxFCR_FTH_Msk) | DMA_FIFO_THRESHOLD_FULL;
+        ((DMA_Stream_TypeDef *) spi_tx_dma.Instance)->CR =
+            (((DMA_Stream_TypeDef *) spi_tx_dma.Instance)->CR & ~DMA_SxCR_MBURST_Msk) | DMA_MBURST_INC4;
+#if defined(MCU_SERIES_H7)
+        ((DMA_Stream_TypeDef *) spi_tx_dma.Instance)->CR =
+            (((DMA_Stream_TypeDef *) spi_tx_dma.Instance)->CR & ~DMA_SxCR_PBURST_Msk) | DMA_PBURST_INC4;
+#else
+        ((DMA_Stream_TypeDef *) spi_tx_dma.Instance)->CR =
+            (((DMA_Stream_TypeDef *) spi_tx_dma.Instance)->CR & ~DMA_SxCR_PBURST_Msk) | DMA_PBURST_SINGLE;
+#endif
         fb_alloc_mark_permanent();
     }
 }
@@ -409,8 +443,8 @@ static void spi_lcd_callback(SPI_HandleTypeDef *hspi)
             }
             case SPI_TX_CB_MEMORY_WRITE: {
                 uint16_t *addr = spi_tx_cb_state_memory_write_addr;
-                size_t count = IM_MIN(spi_tx_cb_state_memory_write_count, 65535);
-                spi_tx_cb_state = (spi_tx_cb_state_memory_write_count > 65535) ? SPI_TX_CB_MEMORY_WRITE : SPI_TX_CB_DISPLAY_ON;
+                size_t count = IM_MIN(spi_tx_cb_state_memory_write_count, (65536-8));
+                spi_tx_cb_state = (spi_tx_cb_state_memory_write_count > (65536-8)) ? SPI_TX_CB_MEMORY_WRITE : SPI_TX_CB_DISPLAY_ON;
                 spi_tx_cb_state_memory_write_addr += count;
                 spi_tx_cb_state_memory_write_count -= count;
                 if (spi_tx_cb_state_memory_write_first) {
@@ -419,11 +453,16 @@ static void spi_lcd_callback(SPI_HandleTypeDef *hspi)
                     spi_tx_cb_state_memory_write_first = false;
                     OMV_SPI_LCD_CONTROLLER->spi->Init.DataSize = SPI_DATASIZE_16BIT;
 #if defined(MCU_SERIES_H7)
-                    OMV_SPI_LCD_CONTROLLER->spi->Instance->CFG1 = (OMV_SPI_LCD_CONTROLLER->spi->Instance->CFG1 & ~SPI_CFG1_DSIZE_Msk) | SPI_DATASIZE_16BIT;
+                    OMV_SPI_LCD_CONTROLLER->spi->Instance->CFG1 =
+                        (OMV_SPI_LCD_CONTROLLER->spi->Instance->CFG1 & ~SPI_CFG1_DSIZE_Msk) | SPI_DATASIZE_16BIT;
+                    OMV_SPI_LCD_CONTROLLER->spi->Instance->CFG1 =
+                        (OMV_SPI_LCD_CONTROLLER->spi->Instance->CFG1 & ~SPI_CFG1_FTHLV_Msk) | SPI_FIFO_THRESHOLD_08DATA;
 #elif defined(MCU_SERIES_F7)
-                    OMV_SPI_LCD_CONTROLLER->spi->Instance->CR2 = (OMV_SPI_LCD_CONTROLLER->spi->Instance->CR2 & ~SPI_CR2_DS_Msk) | SPI_DATASIZE_16BIT;
+                    OMV_SPI_LCD_CONTROLLER->spi->Instance->CR2 =
+                        (OMV_SPI_LCD_CONTROLLER->spi->Instance->CR2 & ~SPI_CR2_DS_Msk) | SPI_DATASIZE_16BIT;
 #elif defined(MCU_SERIES_F4)
-                    OMV_SPI_LCD_CONTROLLER->spi->Instance->CR1 = (OMV_SPI_LCD_CONTROLLER->spi->Instance->CR1 & ~SPI_CR1_DFF_Msk) | SPI_DATASIZE_16BIT;
+                    OMV_SPI_LCD_CONTROLLER->spi->Instance->CR1 =
+                        (OMV_SPI_LCD_CONTROLLER->spi->Instance->CR1 & ~SPI_CR1_DFF_Msk) | SPI_DATASIZE_16BIT;
 #endif
                     OMV_SPI_LCD_CS_LOW();
                 }
@@ -436,11 +475,16 @@ static void spi_lcd_callback(SPI_HandleTypeDef *hspi)
                 spi_tx_cb_state = SPI_TX_CB_MEMORY_WRITE_CMD;
                 OMV_SPI_LCD_CONTROLLER->spi->Init.DataSize = SPI_DATASIZE_8BIT;
 #if defined(MCU_SERIES_H7)
-                OMV_SPI_LCD_CONTROLLER->spi->Instance->CFG1 = (OMV_SPI_LCD_CONTROLLER->spi->Instance->CFG1 & ~SPI_CFG1_DSIZE_Msk) | SPI_DATASIZE_8BIT;
+                OMV_SPI_LCD_CONTROLLER->spi->Instance->CFG1 =
+                    (OMV_SPI_LCD_CONTROLLER->spi->Instance->CFG1 & ~SPI_CFG1_DSIZE_Msk) | SPI_DATASIZE_8BIT;
+                OMV_SPI_LCD_CONTROLLER->spi->Instance->CFG1 =
+                    (OMV_SPI_LCD_CONTROLLER->spi->Instance->CFG1 & ~SPI_CFG1_FTHLV_Msk) | SPI_FIFO_THRESHOLD_01DATA;
 #elif defined(MCU_SERIES_F7)
-                OMV_SPI_LCD_CONTROLLER->spi->Instance->CR2 = (OMV_SPI_LCD_CONTROLLER->spi->Instance->CR2 & ~SPI_CR2_DS_Msk) | SPI_DATASIZE_8BIT;
+                OMV_SPI_LCD_CONTROLLER->spi->Instance->CR2 =
+                    (OMV_SPI_LCD_CONTROLLER->spi->Instance->CR2 & ~SPI_CR2_DS_Msk) | SPI_DATASIZE_8BIT;
 #elif defined(MCU_SERIES_F4)
-                OMV_SPI_LCD_CONTROLLER->spi->Instance->CR1 = (OMV_SPI_LCD_CONTROLLER->spi->Instance->CR1 & ~SPI_CR1_DFF_Msk) | SPI_DATASIZE_8BIT;
+                OMV_SPI_LCD_CONTROLLER->spi->Instance->CR1 =
+                    (OMV_SPI_LCD_CONTROLLER->spi->Instance->CR1 & ~SPI_CR1_DFF_Msk) | SPI_DATASIZE_8BIT;
 #endif
                 OMV_SPI_LCD_CS_LOW();
                 HAL_SPI_Transmit_IT(OMV_SPI_LCD_CONTROLLER->spi, (uint8_t *) display_on, sizeof(display_on));
@@ -718,7 +762,7 @@ static const uint16_t resolution_w_h[][2] = {
 
 static const LTDC_InitTypeDef resolution_cfg[] = { // CVT-RB ver 2
     { // QVGA
-        .HSPolarity = LTDC_HSPOLARITY_AL,
+        .HSPolarity = LTDC_HSPOLARITY_AH,
         .VSPolarity = LTDC_VSPOLARITY_AL,
         .DEPolarity = LTDC_DEPOLARITY_AL,
         .PCPolarity = LTDC_PCPOLARITY_IPC,
@@ -733,7 +777,7 @@ static const LTDC_InitTypeDef resolution_cfg[] = { // CVT-RB ver 2
         .Backcolor = {.Blue=0, .Green=0, .Red=0}
     },
     { // TQVGA
-        .HSPolarity = LTDC_HSPOLARITY_AL,
+        .HSPolarity = LTDC_HSPOLARITY_AH,
         .VSPolarity = LTDC_VSPOLARITY_AL,
         .DEPolarity = LTDC_DEPOLARITY_AL,
         .PCPolarity = LTDC_PCPOLARITY_IPC,
@@ -748,7 +792,7 @@ static const LTDC_InitTypeDef resolution_cfg[] = { // CVT-RB ver 2
         .Backcolor = {.Blue=0, .Green=0, .Red=0}
     },
     { // FHVGA
-        .HSPolarity = LTDC_HSPOLARITY_AL,
+        .HSPolarity = LTDC_HSPOLARITY_AH,
         .VSPolarity = LTDC_VSPOLARITY_AL,
         .DEPolarity = LTDC_DEPOLARITY_AL,
         .PCPolarity = LTDC_PCPOLARITY_IPC,
@@ -763,7 +807,7 @@ static const LTDC_InitTypeDef resolution_cfg[] = { // CVT-RB ver 2
         .Backcolor = {.Blue=0, .Green=0, .Red=0}
     },
     { // FHVGA2
-        .HSPolarity = LTDC_HSPOLARITY_AL,
+        .HSPolarity = LTDC_HSPOLARITY_AH,
         .VSPolarity = LTDC_VSPOLARITY_AL,
         .DEPolarity = LTDC_DEPOLARITY_AL,
         .PCPolarity = LTDC_PCPOLARITY_IPC,
@@ -778,7 +822,7 @@ static const LTDC_InitTypeDef resolution_cfg[] = { // CVT-RB ver 2
         .Backcolor = {.Blue=0, .Green=0, .Red=0}
     },
     { // VGA
-        .HSPolarity = LTDC_HSPOLARITY_AL,
+        .HSPolarity = LTDC_HSPOLARITY_AH,
         .VSPolarity = LTDC_VSPOLARITY_AL,
         .DEPolarity = LTDC_DEPOLARITY_AL,
         .PCPolarity = LTDC_PCPOLARITY_IPC,
@@ -793,7 +837,7 @@ static const LTDC_InitTypeDef resolution_cfg[] = { // CVT-RB ver 2
         .Backcolor = {.Blue=0, .Green=0, .Red=0}
     },
     { // THVGA
-        .HSPolarity = LTDC_HSPOLARITY_AL,
+        .HSPolarity = LTDC_HSPOLARITY_AH,
         .VSPolarity = LTDC_VSPOLARITY_AL,
         .DEPolarity = LTDC_DEPOLARITY_AL,
         .PCPolarity = LTDC_PCPOLARITY_IPC,
@@ -808,7 +852,7 @@ static const LTDC_InitTypeDef resolution_cfg[] = { // CVT-RB ver 2
         .Backcolor = {.Blue=0, .Green=0, .Red=0}
     },
     { // FWVGA
-        .HSPolarity = LTDC_HSPOLARITY_AL,
+        .HSPolarity = LTDC_HSPOLARITY_AH,
         .VSPolarity = LTDC_VSPOLARITY_AL,
         .DEPolarity = LTDC_DEPOLARITY_AL,
         .PCPolarity = LTDC_PCPOLARITY_IPC,
@@ -823,7 +867,7 @@ static const LTDC_InitTypeDef resolution_cfg[] = { // CVT-RB ver 2
         .Backcolor = {.Blue=0, .Green=0, .Red=0}
     },
     { // FWVGA2
-        .HSPolarity = LTDC_HSPOLARITY_AL,
+        .HSPolarity = LTDC_HSPOLARITY_AH,
         .VSPolarity = LTDC_VSPOLARITY_AL,
         .DEPolarity = LTDC_DEPOLARITY_AL,
         .PCPolarity = LTDC_PCPOLARITY_IPC,
@@ -838,7 +882,7 @@ static const LTDC_InitTypeDef resolution_cfg[] = { // CVT-RB ver 2
         .Backcolor = {.Blue=0, .Green=0, .Red=0}
     },
     { // TFWVGA
-        .HSPolarity = LTDC_HSPOLARITY_AL,
+        .HSPolarity = LTDC_HSPOLARITY_AH,
         .VSPolarity = LTDC_VSPOLARITY_AL,
         .DEPolarity = LTDC_DEPOLARITY_AL,
         .PCPolarity = LTDC_PCPOLARITY_IPC,
@@ -853,7 +897,7 @@ static const LTDC_InitTypeDef resolution_cfg[] = { // CVT-RB ver 2
         .Backcolor = {.Blue=0, .Green=0, .Red=0}
     },
     { // TFWVGA2
-        .HSPolarity = LTDC_HSPOLARITY_AL,
+        .HSPolarity = LTDC_HSPOLARITY_AH,
         .VSPolarity = LTDC_VSPOLARITY_AL,
         .DEPolarity = LTDC_DEPOLARITY_AL,
         .PCPolarity = LTDC_PCPOLARITY_IPC,
@@ -868,7 +912,7 @@ static const LTDC_InitTypeDef resolution_cfg[] = { // CVT-RB ver 2
         .Backcolor = {.Blue=0, .Green=0, .Red=0}
     },
     { // SVGA
-        .HSPolarity = LTDC_HSPOLARITY_AL,
+        .HSPolarity = LTDC_HSPOLARITY_AH,
         .VSPolarity = LTDC_VSPOLARITY_AL,
         .DEPolarity = LTDC_DEPOLARITY_AL,
         .PCPolarity = LTDC_PCPOLARITY_IPC,
@@ -883,7 +927,7 @@ static const LTDC_InitTypeDef resolution_cfg[] = { // CVT-RB ver 2
         .Backcolor = {.Blue=0, .Green=0, .Red=0}
     },
     { // WSVGA
-        .HSPolarity = LTDC_HSPOLARITY_AL,
+        .HSPolarity = LTDC_HSPOLARITY_AH,
         .VSPolarity = LTDC_VSPOLARITY_AL,
         .DEPolarity = LTDC_DEPOLARITY_AL,
         .PCPolarity = LTDC_PCPOLARITY_IPC,
@@ -898,7 +942,7 @@ static const LTDC_InitTypeDef resolution_cfg[] = { // CVT-RB ver 2
         .Backcolor = {.Blue=0, .Green=0, .Red=0}
     },
     { // XGA
-        .HSPolarity = LTDC_HSPOLARITY_AL,
+        .HSPolarity = LTDC_HSPOLARITY_AH,
         .VSPolarity = LTDC_VSPOLARITY_AL,
         .DEPolarity = LTDC_DEPOLARITY_AL,
         .PCPolarity = LTDC_PCPOLARITY_IPC,
@@ -913,7 +957,7 @@ static const LTDC_InitTypeDef resolution_cfg[] = { // CVT-RB ver 2
         .Backcolor = {.Blue=0, .Green=0, .Red=0}
     },
     { // SXGA
-        .HSPolarity = LTDC_HSPOLARITY_AL,
+        .HSPolarity = LTDC_HSPOLARITY_AH,
         .VSPolarity = LTDC_VSPOLARITY_AL,
         .DEPolarity = LTDC_DEPOLARITY_AL,
         .PCPolarity = LTDC_PCPOLARITY_IPC,
@@ -928,7 +972,7 @@ static const LTDC_InitTypeDef resolution_cfg[] = { // CVT-RB ver 2
         .Backcolor = {.Blue=0, .Green=0, .Red=0}
     },
     { // SXGA2
-        .HSPolarity = LTDC_HSPOLARITY_AL,
+        .HSPolarity = LTDC_HSPOLARITY_AH,
         .VSPolarity = LTDC_VSPOLARITY_AL,
         .DEPolarity = LTDC_DEPOLARITY_AL,
         .PCPolarity = LTDC_PCPOLARITY_IPC,
@@ -943,7 +987,7 @@ static const LTDC_InitTypeDef resolution_cfg[] = { // CVT-RB ver 2
         .Backcolor = {.Blue=0, .Green=0, .Red=0}
     },
     { // UXGA
-        .HSPolarity = LTDC_HSPOLARITY_AL,
+        .HSPolarity = LTDC_HSPOLARITY_AH,
         .VSPolarity = LTDC_VSPOLARITY_AL,
         .DEPolarity = LTDC_DEPOLARITY_AL,
         .PCPolarity = LTDC_PCPOLARITY_IPC,
@@ -958,7 +1002,7 @@ static const LTDC_InitTypeDef resolution_cfg[] = { // CVT-RB ver 2
         .Backcolor = {.Blue=0, .Green=0, .Red=0}
     },
     { // HD
-        .HSPolarity = LTDC_HSPOLARITY_AL,
+        .HSPolarity = LTDC_HSPOLARITY_AH,
         .VSPolarity = LTDC_VSPOLARITY_AL,
         .DEPolarity = LTDC_DEPOLARITY_AL,
         .PCPolarity = LTDC_PCPOLARITY_IPC,
@@ -973,7 +1017,7 @@ static const LTDC_InitTypeDef resolution_cfg[] = { // CVT-RB ver 2
         .Backcolor = {.Blue=0, .Green=0, .Red=0}
     },
     { // FHD
-        .HSPolarity = LTDC_HSPOLARITY_AL,
+        .HSPolarity = LTDC_HSPOLARITY_AH,
         .VSPolarity = LTDC_VSPOLARITY_AL,
         .DEPolarity = LTDC_DEPOLARITY_AL,
         .PCPolarity = LTDC_PCPOLARITY_IPC,
@@ -1022,7 +1066,7 @@ static void ltdc_pll_config_init(int frame_size, int refresh_rate)
             uint32_t pll_clk = pixel_clock * divr;
 
             uint32_t vco = 0;
-            if (150000 <= pll_clk && pll_clk <= 42000) vco = RCC_PLL3VCOMEDIUM;
+            if (150000 <= pll_clk && pll_clk <= 420000) vco = RCC_PLL3VCOMEDIUM;
             else if (192000 <= pll_clk && pll_clk <= 836000) vco = RCC_PLL3VCOWIDE;
             else continue;
 
@@ -1067,7 +1111,7 @@ static void ltdc_config_init(int frame_size, int refresh_rate)
     framebuffer_tail = 0;
 
     for (int i = 0; i < FRAMEBUFFER_COUNT; i++) {
-        framebuffers[i] = (uint16_t *) fb_alloc0(w * h * sizeof(uint16_t), FB_ALLOC_NO_HINT);
+        framebuffers[i] = (uint16_t *) fb_alloc0(w * h * sizeof(uint16_t), FB_ALLOC_CACHE_ALIGN);
         ltdc_framebuffer_layers[i].WindowX0 = 0;
         ltdc_framebuffer_layers[i].WindowX1 = w;
         ltdc_framebuffer_layers[i].WindowY0 = 0;
@@ -1221,17 +1265,21 @@ static void ltdc_set_backlight(int intensity)
         HAL_GPIO_Init(OMV_LCD_BL_PORT, &GPIO_InitStructure);
 
         lcd_tim_handle.Instance = OMV_LCD_BL_TIM;
-        lcd_tim_handle.Init.Period = period;
-        lcd_tim_handle.Init.Prescaler = TIM_ETRPRESCALER_DIV1;
+        lcd_tim_handle.Init.Prescaler = 0;
         lcd_tim_handle.Init.CounterMode = TIM_COUNTERMODE_UP;
+        lcd_tim_handle.Init.Period = period;
         lcd_tim_handle.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+        lcd_tim_handle.Init.RepetitionCounter = 0;
+        lcd_tim_handle.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
 
         TIM_OC_InitTypeDef lcd_tim_oc_handle;
         lcd_tim_oc_handle.Pulse = (period * intensity) / 255;
         lcd_tim_oc_handle.OCMode = TIM_OCMODE_PWM1;
         lcd_tim_oc_handle.OCPolarity = TIM_OCPOLARITY_HIGH;
+        lcd_tim_oc_handle.OCNPolarity = TIM_OCNPOLARITY_HIGH;
         lcd_tim_oc_handle.OCFastMode = TIM_OCFAST_DISABLE;
         lcd_tim_oc_handle.OCIdleState = TIM_OCIDLESTATE_RESET;
+        lcd_tim_oc_handle.OCNIdleState = TIM_OCNIDLESTATE_RESET;
 
         HAL_TIM_PWM_Init(&lcd_tim_handle);
         HAL_TIM_PWM_ConfigChannel(&lcd_tim_handle, &lcd_tim_oc_handle, OMV_LCD_BL_TIM_CHANNEL);
@@ -1987,3 +2035,5 @@ void py_lcd_init0()
 {
     py_lcd_deinit();
 }
+
+#endif // MICROPY_PY_LCD

@@ -1,8 +1,8 @@
 /*
  * This file is part of the OpenMV project.
  *
- * Copyright (c) 2013-2019 Ibrahim Abdelkader <iabdalkader@openmv.io>
- * Copyright (c) 2013-2019 Kwabena W. Agyeman <kwagyeman@openmv.io>
+ * Copyright (c) 2013-2021 Ibrahim Abdelkader <iabdalkader@openmv.io>
+ * Copyright (c) 2013-2021 Kwabena W. Agyeman <kwagyeman@openmv.io>
  *
  * This work is licensed under the MIT license, see the file LICENSE for details.
  *
@@ -21,7 +21,7 @@
   */
 #define FIRMWARE_VERSION_MAJOR      (3)
 #define FIRMWARE_VERSION_MINOR      (9)
-#define FIRMWARE_VERSION_PATCH      (3)
+#define FIRMWARE_VERSION_PATCH      (4)
 
 /**
   * To add a new debugging command, increment the last command value used.

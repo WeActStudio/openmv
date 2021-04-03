@@ -94,6 +94,7 @@ FIRM_OBJ += $(addprefix $(BUILD)/$(OMV_DIR)/alloc/, \
 	xalloc.o                    \
 	fb_alloc.o                  \
 	umm_malloc.o                \
+	dma_alloc.o                 \
 	unaligned_memcpy.o          \
    )
 
@@ -110,6 +111,7 @@ FIRM_OBJ += $(addprefix $(BUILD)/$(OMV_DIR)/common/, \
 FIRM_OBJ += $(addprefix $(BUILD)/$(OMV_DIR)/sensors/,   \
 	ov2640.o                    \
 	ov5640.o                    \
+	ov7670.o                    \
 	ov7690.o                    \
 	ov7725.o                    \
 	ov9650.o                    \

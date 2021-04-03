@@ -1,7 +1,7 @@
 # This file is part of the OpenMV project.
 #
-# Copyright (c) 2013-2019 Ibrahim Abdelkader <iabdalkader@openmv.io>
-# Copyright (c) 2013-2019 Kwabena W. Agyeman <kwagyeman@openmv.io>
+# Copyright (c) 2013-2021 Ibrahim Abdelkader <iabdalkader@openmv.io>
+# Copyright (c) 2013-2021 Kwabena W. Agyeman <kwagyeman@openmv.io>
 #
 # This work is licensed under the MIT license, see the file LICENSE for details.
 #
@@ -24,6 +24,7 @@ stm32h7xx_hal_flash.c\
 stm32h7xx_hal_flash_ex.c\
 stm32h7xx_hal_gpio.c\
 stm32h7xx_hal_hcd.c\
+stm32h7xx_hal_hsem.c\
 stm32h7xx_hal_i2c.c\
 stm32h7xx_hal_i2c_ex.c\
 stm32h7xx_hal_ltdc.c\

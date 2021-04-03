@@ -1,8 +1,8 @@
 /*
  * This file is part of the OpenMV project.
  *
- * Copyright (c) 2013-2019 Ibrahim Abdelkader <iabdalkader@openmv.io>
- * Copyright (c) 2013-2019 Kwabena W. Agyeman <kwagyeman@openmv.io>
+ * Copyright (c) 2013-2021 Ibrahim Abdelkader <iabdalkader@openmv.io>
+ * Copyright (c) 2013-2021 Kwabena W. Agyeman <kwagyeman@openmv.io>
  *
  * This work is licensed under the MIT license, see the file LICENSE for details.
  *
@@ -18,6 +18,8 @@
 #include "py_lcd_touch.h"
 #include "omv_boardconfig.h"
 #include STM32_HAL_H
+
+#if MICROPY_PY_LCD
 
 #ifdef OMV_TOUCH_PRESENT
 #define FT5X06_I2C_ADDR 0x38
@@ -187,3 +189,5 @@ void lcd_touch_register_touch_cb(mp_obj_t cb)
     if (cb != mp_const_none) extint_enable(OMV_TOUCH_INT_PIN->pin);
 }
 #endif // OMV_TOUCH_PRESENT
+
+#endif // MICROPY_PY_LCD

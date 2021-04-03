@@ -1,15 +1,18 @@
 /*
  * This file is part of the OpenMV project.
  *
- * Copyright (c) 2013-2019 Ibrahim Abdelkader <iabdalkader@openmv.io>
- * Copyright (c) 2013-2019 Kwabena W. Agyeman <kwagyeman@openmv.io>
+ * Copyright (c) 2013-2021 Ibrahim Abdelkader <iabdalkader@openmv.io>
+ * Copyright (c) 2013-2021 Kwabena W. Agyeman <kwagyeman@openmv.io>
  *
  * This work is licensed under the MIT license, see the file LICENSE for details.
  *
  * HAL MSP.
  */
 #include STM32_HAL_H
+#include "axiqos.h"
 #include "omv_boardconfig.h"
+
+#include "irq.h"
 
 /* GPIO struct */
 typedef struct {
@@ -41,29 +44,55 @@ void HAL_MspInit(void)
     /* Set the system clock */
     SystemClock_Config();
 
-    #if defined(OMV_DMA_REGION_BASE)
+    #if defined(OMV_DMA_REGION_D1_BASE)\
+     || defined(OMV_DMA_REGION_D2_BASE)\
+     || defined(OMV_DMA_REGION_D3_BASE)
     __DSB(); __ISB();
     HAL_MPU_Disable();
 
     /* Configure the MPU attributes to disable caching DMA buffers */
     MPU_Region_InitTypeDef MPU_InitStruct;
-    MPU_InitStruct.Enable           = MPU_REGION_ENABLE;
-    MPU_InitStruct.BaseAddress      = OMV_DMA_REGION_BASE;
-    MPU_InitStruct.Size             = OMV_DMA_REGION_SIZE;
     MPU_InitStruct.AccessPermission = MPU_REGION_FULL_ACCESS;
     MPU_InitStruct.IsBufferable     = MPU_ACCESS_NOT_BUFFERABLE;
     MPU_InitStruct.IsCacheable      = MPU_ACCESS_NOT_CACHEABLE;
     MPU_InitStruct.IsShareable      = MPU_ACCESS_NOT_SHAREABLE;
-    MPU_InitStruct.Number           = MPU_REGION_NUMBER15;
     MPU_InitStruct.TypeExtField     = MPU_TEX_LEVEL1;
     MPU_InitStruct.SubRegionDisable = 0x00;
     MPU_InitStruct.DisableExec      = MPU_INSTRUCTION_ACCESS_ENABLE;
+
+    // Disable all regions.
+    for (int i=MPU_REGION_NUMBER0; i<MPU_REGION_NUMBER15; i++) {
+        MPU_InitStruct.Number = i;
+        MPU_InitStruct.Enable = MPU_REGION_DISABLE;
+        HAL_MPU_ConfigRegion(&MPU_InitStruct);
+    }
+
+    MPU_InitStruct.Enable           = MPU_REGION_ENABLE;
+    #if defined(OMV_DMA_REGION_D1_BASE)
+    MPU_InitStruct.Number           = MPU_REGION_NUMBER15;
+    MPU_InitStruct.BaseAddress      = OMV_DMA_REGION_D1_BASE;
+    MPU_InitStruct.Size             = OMV_DMA_REGION_D1_SIZE;
     HAL_MPU_ConfigRegion(&MPU_InitStruct);
+    #endif // defined(OMV_DMA_REGION_D1_BASE)
+
+    #if defined(OMV_DMA_REGION_D2_BASE)
+    MPU_InitStruct.Number           = MPU_REGION_NUMBER14;
+    MPU_InitStruct.BaseAddress      = OMV_DMA_REGION_D2_BASE;
+    MPU_InitStruct.Size             = OMV_DMA_REGION_D2_SIZE;
+    HAL_MPU_ConfigRegion(&MPU_InitStruct);
+    #endif // defined(OMV_DMA_REGION_D2_BASE)
+
+    #if defined(OMV_DMA_REGION_D3_BASE)
+    MPU_InitStruct.Number           = MPU_REGION_NUMBER13;
+    MPU_InitStruct.BaseAddress      = OMV_DMA_REGION_D3_BASE;
+    MPU_InitStruct.Size             = OMV_DMA_REGION_D3_SIZE;
+    HAL_MPU_ConfigRegion(&MPU_InitStruct);
+    #endif // defined(OMV_DMA_REGION_D3_BASE)
 
     #if defined(OMV_RUN_QSPI)
 	/* Configure the MPU attributes for the QSPI 256MB without instruction access */
     MPU_InitStruct.Enable           = MPU_REGION_ENABLE;
-    MPU_InitStruct.Number           = MPU_REGION_NUMBER13;
+    MPU_InitStruct.Number           = MPU_REGION_NUMBER10;
     MPU_InitStruct.BaseAddress      = QSPI_BASE;
     MPU_InitStruct.Size             = MPU_REGION_SIZE_256MB;
     MPU_InitStruct.AccessPermission = MPU_REGION_NO_ACCESS;
@@ -77,7 +106,7 @@ void HAL_MspInit(void)
 
     /* Configure the MPU attributes for the QSPI 8MB (QSPI Flash Size) to Cacheable WT */
     MPU_InitStruct.Enable           = MPU_REGION_ENABLE;
-    MPU_InitStruct.Number           = MPU_REGION_NUMBER14;
+    MPU_InitStruct.Number           = MPU_REGION_NUMBER11;
     MPU_InitStruct.BaseAddress      = QSPI_BASE;
     MPU_InitStruct.Size             = MPU_REGION_SIZE_8MB;
     MPU_InitStruct.AccessPermission = MPU_REGION_PRIV_RO;
@@ -93,7 +122,7 @@ void HAL_MspInit(void)
     /* Enable the MPU */
     HAL_MPU_Enable(MPU_PRIVILEGED_DEFAULT);
     __DSB(); __ISB();
-    #endif
+    #endif // defined(OMV_DMA_REGION_D1_BASE || OMV_DMA_REGION_D2_BASE || OMV_DMA_REGION_D3_BASE)
 
     /* Enable I/D cache */
     #if defined(MCU_SERIES_F7) || defined(MCU_SERIES_H7)
@@ -147,11 +176,6 @@ void HAL_MspInit(void)
     __GPIOK_CLK_ENABLE();
     #endif
 
-    #if defined (OMV_HARDWARE_JPEG)
-    /* Enable JPEG clock */
-    __HAL_RCC_JPEG_CLK_ENABLE();
-    #endif
-
     /* Enable DMA clocks */
     __DMA1_CLK_ENABLE();
     __DMA2_CLK_ENABLE();
@@ -159,11 +183,46 @@ void HAL_MspInit(void)
     #if defined(MCU_SERIES_H7)
     // MDMA clock
     __HAL_RCC_MDMA_CLK_ENABLE();
+    NVIC_SetPriority(MDMA_IRQn, IRQ_PRI_MDMA);
+    HAL_NVIC_EnableIRQ(MDMA_IRQn);
     #endif
 
-    #if defined(OMV_HARDWARE_JPEG)
-    // Enable JPEG clock
-    __HAL_RCC_JPGDECEN_CLK_ENABLE();
+    /* Setup AXI QoS */
+    #if defined(OMV_AXI_QOS_D2_AHB_R_PRI)
+    OMV_AXI_QOS_D2_AHB_R_SET(OMV_AXI_QOS_D2_AHB_R_PRI);
+    #endif
+    #if defined(OMV_AXI_QOS_D2_AHB_W_PRI)
+    OMV_AXI_QOS_D2_AHB_W_SET(OMV_AXI_QOS_D2_AHB_W_PRI);
+    #endif
+    #if defined(OMV_AXI_QOS_C_M7_R_PRI)
+    OMV_AXI_QOS_C_M7_R_SET(OMV_AXI_QOS_C_M7_R_PRI);
+    #endif
+    #if defined(OMV_AXI_QOS_C_M7_W_PRI)
+    OMV_AXI_QOS_C_M7_W_SET(OMV_AXI_QOS_C_M7_W_PRI);
+    #endif
+    #if defined(OMV_AXI_QOS_SDMMC1_R_PRI)
+    OMV_AXI_QOS_SDMMC1_R_SET(OMV_AXI_QOS_SDMMC1_R_PRI);
+    #endif
+    #if defined(OMV_AXI_QOS_SDMMC1_W_PRI)
+    OMV_AXI_QOS_SDMMC1_W_SET(OMV_AXI_QOS_SDMMC1_W_PRI);
+    #endif
+    #if defined(OMV_AXI_QOS_MDMA_R_PRI)
+    OMV_AXI_QOS_MDMA_R_SET(OMV_AXI_QOS_MDMA_R_PRI);
+    #endif
+    #if defined(OMV_AXI_QOS_MDMA_W_PRI)
+    OMV_AXI_QOS_MDMA_W_SET(OMV_AXI_QOS_MDMA_W_PRI);
+    #endif
+    #if defined(OMV_AXI_QOS_DMA2D_R_PRI)
+    OMV_AXI_QOS_DMA2D_R_SET(OMV_AXI_QOS_DMA2D_R_PRI);
+    #endif
+    #if defined(OMV_AXI_QOS_DMA2D_W_PRI)
+    OMV_AXI_QOS_DMA2D_W_SET(OMV_AXI_QOS_DMA2D_W_PRI);
+    #endif
+    #if defined(OMV_AXI_QOS_LTDC_R_PRI)
+    OMV_AXI_QOS_LTDC_R_SET(OMV_AXI_QOS_LTDC_R_PRI);
+    #endif
+    #if defined(OMV_AXI_QOS_LTDC_W_PRI)
+    OMV_AXI_QOS_LTDC_W_SET(OMV_AXI_QOS_LTDC_W_PRI);
     #endif
 
     #if defined(DCMI_RESET_PIN) || defined(DCMI_PWDN_PIN) || defined(DCMI_FSYNC_PIN)
@@ -267,6 +326,12 @@ void HAL_TIM_PWM_MspInit(TIM_HandleTypeDef *htim)
         OMV_LCD_BL_TIM_CLK_ENABLE();
     }
     #endif
+
+    #if defined(OMV_BUZZER_TIM)
+    if (htim->Instance == OMV_BUZZER_TIM) {
+        OMV_BUZZER_TIM_CLK_ENABLE();
+    }
+    #endif
 }
 
 void HAL_TIM_PWM_MspDeInit(TIM_HandleTypeDef *htim)
@@ -276,6 +341,14 @@ void HAL_TIM_PWM_MspDeInit(TIM_HandleTypeDef *htim)
         OMV_LCD_BL_TIM_FORCE_RESET();
         OMV_LCD_BL_TIM_RELEASE_RESET();
         OMV_LCD_BL_TIM_CLK_DISABLE();
+    }
+    #endif
+
+    #if defined(OMV_BUZZER_TIM)
+    if (htim->Instance == OMV_BUZZER_TIM) {
+        OMV_BUZZER_TIM_FORCE_RESET();
+        OMV_BUZZER_TIM_RELEASE_RESET();
+        OMV_BUZZER_TIM_CLK_DISABLE();
     }
     #endif
 }
@@ -430,6 +503,20 @@ void HAL_DMA2D_MspDeInit(DMA2D_HandleTypeDef *hdma2d)
     __HAL_RCC_DMA2D_CLK_DISABLE();
 }
 
+#if (OMV_HARDWARE_JPEG == 1)
+void HAL_JPEG_MspInit(JPEG_HandleTypeDef *hjpeg)
+{
+    __HAL_RCC_JPEG_CLK_ENABLE();
+}
+
+void HAL_JPEG_MspDeInit(JPEG_HandleTypeDef *hjpeg)
+{
+    __HAL_RCC_JPEG_FORCE_RESET();
+    __HAL_RCC_JPEG_RELEASE_RESET();
+    __HAL_RCC_JPEG_CLK_DISABLE();
+}
+#endif
+
 #if defined(OMV_LCD_CONTROLLER) && (!defined(OMV_DSI_CONTROLLER))
 typedef struct {
     GPIO_TypeDef *port;
@@ -561,4 +648,19 @@ void HAL_DAC_MspDeinit(DAC_HandleTypeDef *hdac)
 void HAL_MspDeInit(void)
 {
 
+}
+
+#if (OMV_HARDWARE_JPEG == 1)
+extern MDMA_HandleTypeDef JPEG_MDMA_Handle_In;
+extern MDMA_HandleTypeDef JPEG_MDMA_Handle_Out;
+#endif
+
+void MDMA_IRQHandler()
+{
+    IRQ_ENTER(MDMA_IRQn);
+    #if (OMV_HARDWARE_JPEG == 1)
+    HAL_MDMA_IRQHandler(&JPEG_MDMA_Handle_In);
+    HAL_MDMA_IRQHandler(&JPEG_MDMA_Handle_Out);
+    #endif
+    IRQ_EXIT(MDMA_IRQn);
 }

@@ -1,8 +1,8 @@
 /*
  * This file is part of the OpenMV project.
  *
- * Copyright (c) 2013-2019 Ibrahim Abdelkader <iabdalkader@openmv.io>
- * Copyright (c) 2013-2019 Kwabena W. Agyeman <kwagyeman@openmv.io>
+ * Copyright (c) 2013-2021 Ibrahim Abdelkader <iabdalkader@openmv.io>
+ * Copyright (c) 2013-2021 Kwabena W. Agyeman <kwagyeman@openmv.io>
  *
  * This work is licensed under the MIT license, see the file LICENSE for details.
  *
@@ -21,6 +21,9 @@
 #include "py/mphal.h"
 
 #define HIMAX_BOOT_RETRY            (10)
+#define HIMAX_LINE_LEN_PCK_FULL     0x178
+#define HIMAX_FRAME_LENGTH_FULL     0x109
+
 #define HIMAX_LINE_LEN_PCK_QVGA     0x178
 #define HIMAX_FRAME_LENGTH_QVGA     0x104
 
@@ -45,6 +48,7 @@ static const uint16_t default_regs[][2] = {
     {0x3059,               0x1E},
     {0x3064,               0x00},
     {0x3065,               0x04},          //  pad pull 0
+    {ANA_Register_17,      0x00},          //  Disable internal oscillator
    
     {BLC_CFG,              0x43},          //  BLC_on, IIR
    
@@ -60,7 +64,7 @@ static const uint16_t default_regs[][2] = {
     {SINGLE_THR_HOT,       0x90},          //  single hot pixel th
     {SINGLE_THR_COLD,      0x40},          //  single cold pixel th
     {0x1012,               0x00},          //  Sync. shift disable
-    {0x2000,               0x07},
+    {STATISTIC_CTRL,       0x07},          //  AE stat en | MD LROI stat en | magic
     {0x2003,               0x00},
     {0x2004,               0x1C},
     {0x2007,               0x00},
@@ -75,13 +79,13 @@ static const uint16_t default_regs[][2] = {
     {0x2018,               0x9B},
    
     {AE_CTRL,              0x01},          //Automatic Exposure
-    {AE_TARGET_MEAN,       0x3C},          //AE target mean          [Def: 0x3C]
+    {AE_TARGET_MEAN,       0x64},          //AE target mean          [Def: 0x3C]
     {AE_MIN_MEAN,          0x0A},          //AE min target mean      [Def: 0x0A]
     {CONVERGE_IN_TH,       0x03},          //Converge in threshold   [Def: 0x03]
     {CONVERGE_OUT_TH,      0x05},          //Converge out threshold  [Def: 0x05]
     {MAX_INTG_H,           (HIMAX_FRAME_LENGTH_QVGA-2)>>8},          //Maximum INTG High Byte  [Def: 0x01]
     {MAX_INTG_L,           (HIMAX_FRAME_LENGTH_QVGA-2)&0xFF},        //Maximum INTG Low Byte   [Def: 0x54]
-    {MAX_AGAIN_FULL,       0x03},          //Maximum Analog gain in full frame mode [Def: 0x03]
+    {MAX_AGAIN_FULL,       0x04},          //Maximum Analog gain in full frame mode [Def: 0x03]
     {MAX_AGAIN_BIN2,       0x04},          //Maximum Analog gain in bin2 mode       [Def: 0x04]
     {MAX_DGAIN,            0xC0},
    
@@ -99,7 +103,7 @@ static const uint16_t default_regs[][2] = {
     {FS_50HZ_H,            0x00},
     {FS_50HZ_L,            0x32},
 
-    {MD_CTRL,              0x30},
+    {MD_CTRL,              0x00},
     {FRAME_LEN_LINES_H,    HIMAX_FRAME_LENGTH_QVGA>>8},
     {FRAME_LEN_LINES_L,    HIMAX_FRAME_LENGTH_QVGA&0xFF},
     {LINE_LEN_PCK_H,       HIMAX_LINE_LEN_PCK_QVGA>>8},
@@ -179,16 +183,35 @@ static int set_pixformat(sensor_t *sensor, pixformat_t pixformat)
     return ret;
 }
 
+static const uint16_t FULL_regs[][2] = {
+    {0x0383,                0x01},
+    {0x0387,                0x01},
+    {0x0390,                0x00},
+    {QVGA_WIN_EN,           0x00},// Disable QVGA window readout
+    {MAX_INTG_H,            (HIMAX_FRAME_LENGTH_FULL-2)>>8},
+    {MAX_INTG_L,            (HIMAX_FRAME_LENGTH_FULL-2)&0xFF},
+    {FRAME_LEN_LINES_H,     (HIMAX_FRAME_LENGTH_FULL>>8)},
+    {FRAME_LEN_LINES_L,     (HIMAX_FRAME_LENGTH_FULL&0xFF)},
+    {LINE_LEN_PCK_H,        (HIMAX_LINE_LEN_PCK_FULL>>8)},
+    {LINE_LEN_PCK_L,        (HIMAX_LINE_LEN_PCK_FULL&0xFF)},
+    {GRP_PARAM_HOLD,        0x01},
+    //============= End of regs marker ==================
+    {0x0000,            0x00},
+
+};
+
 static const uint16_t QVGA_regs[][2] = {
     {0x0383,                0x01},
     {0x0387,                0x01},
     {0x0390,                0x00},
+    {QVGA_WIN_EN,           0x01},// Enable QVGA window readout
     {MAX_INTG_H,            (HIMAX_FRAME_LENGTH_QVGA-2)>>8},
     {MAX_INTG_L,            (HIMAX_FRAME_LENGTH_QVGA-2)&0xFF},
     {FRAME_LEN_LINES_H,     (HIMAX_FRAME_LENGTH_QVGA>>8)},
     {FRAME_LEN_LINES_L,     (HIMAX_FRAME_LENGTH_QVGA&0xFF)},
     {LINE_LEN_PCK_H,        (HIMAX_LINE_LEN_PCK_QVGA>>8)},
     {LINE_LEN_PCK_L,        (HIMAX_LINE_LEN_PCK_QVGA&0xFF)},
+    {GRP_PARAM_HOLD,        0x01},
     //============= End of regs marker ==================
     {0x0000,            0x00},
 
@@ -198,12 +221,14 @@ static const uint16_t QQVGA_regs[][2] = {
     {0x0383,                0x03},
     {0x0387,                0x03},
     {0x0390,                0x03},
+    {QVGA_WIN_EN,           0x01},// Enable QVGA window readout
     {MAX_INTG_H,            (HIMAX_FRAME_LENGTH_QQVGA-2)>>8},
     {MAX_INTG_L,            (HIMAX_FRAME_LENGTH_QQVGA-2)&0xFF},
     {FRAME_LEN_LINES_H,     (HIMAX_FRAME_LENGTH_QQVGA>>8)},
     {FRAME_LEN_LINES_L,     (HIMAX_FRAME_LENGTH_QQVGA&0xFF)},
     {LINE_LEN_PCK_H,        (HIMAX_LINE_LEN_PCK_QQVGA>>8)},
     {LINE_LEN_PCK_L,        (HIMAX_LINE_LEN_PCK_QQVGA&0xFF)},
+    {GRP_PARAM_HOLD,        0x01},
     //============= End of regs marker ==================
     {0x0000,            0x00},
 };
@@ -215,6 +240,11 @@ static int set_framesize(sensor_t *sensor, framesize_t framesize)
     uint16_t h = resolution[framesize][1];
 
     switch (framesize) {
+        case FRAMESIZE_320X320:
+            for (int i=0; FULL_regs[i][0] && ret == 0; i++) {
+                ret |= cambus_writeb2(&sensor->bus, sensor->slv_addr, FULL_regs[i][0], FULL_regs[i][1]);
+            }
+            break;
         case FRAMESIZE_QVGA:
             for (int i=0; QVGA_regs[i][0] && ret == 0; i++) {
                 ret |= cambus_writeb2(&sensor->bus, sensor->slv_addr, QVGA_regs[i][0], QVGA_regs[i][1]);
@@ -225,8 +255,8 @@ static int set_framesize(sensor_t *sensor, framesize_t framesize)
                 ret |= cambus_writeb2(&sensor->bus, sensor->slv_addr, QQVGA_regs[i][0], QQVGA_regs[i][1]);
             }
             break;
-        default: 
-            if (w>320 || h>320) 
+        default:
+            if (w>320 || h>320)
                 ret = -1;
             
     }
@@ -237,25 +267,26 @@ static int set_framesize(sensor_t *sensor, framesize_t framesize)
 static int set_framerate(sensor_t *sensor, int framerate)
 {
     uint8_t osc_div = 0;
-    uint32_t framesize = sensor->framesize;
+    bool    highres = false;
 
-    if (framesize == FRAMESIZE_INVALID) {
-        // Use QVGA by default if the framesize is not set
-        framesize = FRAMESIZE_QVGA;
+    if (sensor->framesize == FRAMESIZE_INVALID
+            || sensor->framesize == FRAMESIZE_QVGA
+            || sensor->framesize == FRAMESIZE_320X320) {
+        highres = true;
     }
 
     switch (framerate) {
         case 15:
-            osc_div = (framesize == FRAMESIZE_QVGA) ? 0x01 : 0x00;
+            osc_div = (highres == true) ? 0x01 : 0x00;
             break;
         case 30:
-            osc_div = (framesize == FRAMESIZE_QVGA) ? 0x02 : 0x01;
+            osc_div = (highres == true) ? 0x02 : 0x01;
             break;
         case 60:
-            osc_div = (framesize == FRAMESIZE_QVGA) ? 0x03 : 0x02;
+            osc_div = (highres == true) ? 0x03 : 0x02;
             break;
         case 120:
-            // Set to max FPS.
+            // Set to the max possible FPS at this resolution.
             osc_div = 0x03;
             break;
         default:
@@ -264,48 +295,85 @@ static int set_framerate(sensor_t *sensor, int framerate)
     return cambus_writeb2(&sensor->bus, sensor->slv_addr, OSC_CLK_DIV, 0x08 | osc_div);
 }
 
-static int set_contrast(sensor_t *sensor, int level)
-{
-    return 0;
-}
-
 static int set_brightness(sensor_t *sensor, int level)
 {
-    return 0;
-}
-
-static int set_saturation(sensor_t *sensor, int level)
-{
-    return 0;
+    uint8_t ae_mean;
+    // Simulate brightness levels by setting AE loop target mean.
+    switch (level) {
+        case 0:
+            ae_mean = 60;
+            break;
+        case 1:
+            ae_mean = 80;
+            break;
+        case 2:
+            ae_mean = 100;
+            break;
+        case 3:
+            ae_mean = 127;
+            break;
+        default:
+            ae_mean = 60;
+    }
+    return cambus_writeb2(&sensor->bus, sensor->slv_addr, AE_TARGET_MEAN, ae_mean);
 }
 
 static int set_gainceiling(sensor_t *sensor, gainceiling_t gainceiling)
 {
-    return 0;
-}
-
-static int set_quality(sensor_t *sensor, int quality)
-{
-    return 0;
+    int ret = 0;
+    int gain = 0x0;
+    switch (gainceiling) {
+        case GAINCEILING_2X:
+            gain = 0x01;
+            break;
+        case GAINCEILING_4X:
+            gain = 0x02;
+            break;
+        case GAINCEILING_8X:
+            gain = 0x03;
+            break;
+        case GAINCEILING_16X:
+            gain = 0x04;
+            break;
+        default:
+            return -1;
+    }
+    ret |= cambus_writeb2(&sensor->bus, sensor->slv_addr, MAX_AGAIN_FULL, gain);
+    ret |= cambus_writeb2(&sensor->bus, sensor->slv_addr, MAX_AGAIN_BIN2, gain);
+    return ret;
 }
 
 static int set_colorbar(sensor_t *sensor, int enable)
 {
-    return 0;
-}
-
-static int set_special_effect(sensor_t *sensor, sde_t sde)
-{
-    return 0;
+    return cambus_writeb2(&sensor->bus, sensor->slv_addr, TEST_PATTERN_MODE, enable & 0x1);
 }
 
 static int set_auto_gain(sensor_t *sensor, int enable, float gain_db, float gain_db_ceiling)
 {
-    return 0;
+    int ret = 0;
+    if ((enable == 0) && (!isnanf(gain_db)) && (!isinff(gain_db))) {
+        gain_db = IM_MAX(IM_MIN(gain_db, 24.0f), 0.0f);
+        int gain = fast_ceilf(fast_log2(fast_expf((gain_db / 20.0f) * fast_log(10.0f))));
+        ret |= cambus_writeb2(&sensor->bus, sensor->slv_addr, AE_CTRL, 0); // Must disable AE
+        ret |= cambus_writeb2(&sensor->bus, sensor->slv_addr, ANALOG_GAIN, ((gain&0x7)<<4));
+        ret |= cambus_writeb2(&sensor->bus, sensor->slv_addr, GRP_PARAM_HOLD, 0x01);
+    } else if ((enable != 0) && (!isnanf(gain_db_ceiling)) && (!isinff(gain_db_ceiling))) {
+        gain_db_ceiling = IM_MAX(IM_MIN(gain_db_ceiling, 24.0f), 0.0f);
+        int gain = fast_ceilf(fast_log2(fast_expf((gain_db_ceiling / 20.0f) * fast_log(10.0f))));
+        ret |= cambus_writeb2(&sensor->bus, sensor->slv_addr, MAX_AGAIN_FULL, (gain&0x7));
+        ret |= cambus_writeb2(&sensor->bus, sensor->slv_addr, MAX_AGAIN_BIN2, (gain&0x7));
+        ret |= cambus_writeb2(&sensor->bus, sensor->slv_addr, AE_CTRL, 1);
+    }
+    return ret;
 }
 
 static int get_gain_db(sensor_t *sensor, float *gain_db)
 {
+    uint8_t gain;
+    if (cambus_readb2(&sensor->bus, sensor->slv_addr, ANALOG_GAIN, &gain) != 0) {
+        return -1;
+    }
+    *gain_db = fast_floorf(fast_log(1 << (gain>>4)) / fast_log(10.0f) * 20.0f);
     return 0;
 }
 
@@ -338,16 +406,25 @@ static int set_auto_exposure(sensor_t *sensor, int enable, int exposure_us)
         uint32_t coarse_int;
         uint32_t vt_pix_clk = 0;
 
-        if (sensor->framesize == FRAMESIZE_QVGA) {
-            line_len = HIMAX_LINE_LEN_PCK_QVGA;
-            frame_len = HIMAX_FRAME_LENGTH_QVGA;
-        } else {
-            line_len = HIMAX_LINE_LEN_PCK_QQVGA;
-            frame_len = HIMAX_FRAME_LENGTH_QQVGA;
+        switch (sensor->framesize) {
+            case FRAMESIZE_320X320:
+                line_len = HIMAX_LINE_LEN_PCK_FULL;
+                frame_len = HIMAX_FRAME_LENGTH_FULL;
+                break;
+            case FRAMESIZE_QVGA:
+                line_len = HIMAX_LINE_LEN_PCK_QVGA;
+                frame_len = HIMAX_FRAME_LENGTH_QVGA;
+                break;
+            case FRAMESIZE_QQVGA:
+                line_len = HIMAX_LINE_LEN_PCK_QQVGA;
+                frame_len = HIMAX_FRAME_LENGTH_QQVGA;
+                break;
+            default:
+                return -1;
         }
 
         ret |= get_vt_pix_clk(sensor, &vt_pix_clk);
-        coarse_int = exposure_us * (vt_pix_clk / 1000000) / line_len;
+        coarse_int = fast_roundf(exposure_us * (vt_pix_clk / 1000000.0f) / line_len);
 
         if (coarse_int < 2) {
             coarse_int = 2;
@@ -358,6 +435,7 @@ static int set_auto_exposure(sensor_t *sensor, int enable, int exposure_us)
         ret |= cambus_writeb2(&sensor->bus, sensor->slv_addr, AE_CTRL, 0);
         ret |= cambus_writeb2(&sensor->bus, sensor->slv_addr, INTEGRATION_H, coarse_int>>8);
         ret |= cambus_writeb2(&sensor->bus, sensor->slv_addr, INTEGRATION_L, coarse_int&0xff);
+        ret |= cambus_writeb2(&sensor->bus, sensor->slv_addr, GRP_PARAM_HOLD, 0x01);
     }
 
     return ret;
@@ -365,17 +443,20 @@ static int set_auto_exposure(sensor_t *sensor, int enable, int exposure_us)
 
 static int get_exposure_us(sensor_t *sensor, int *exposure_us)
 {
-    return 0;
-}
-
-static int set_auto_whitebal(sensor_t *sensor, int enable, float r_gain_db, float g_gain_db, float b_gain_db)
-{
-    return 0;
-}
-
-static int get_rgb_gain_db(sensor_t *sensor, float *r_gain_db, float *g_gain_db, float *b_gain_db)
-{
-    return 0;
+    int ret = 0;
+    uint32_t line_len;
+    uint32_t coarse_int = 0;
+    uint32_t vt_pix_clk = 0;
+    if (sensor->framesize == FRAMESIZE_QVGA) {
+        line_len = HIMAX_LINE_LEN_PCK_QVGA;
+    } else {
+        line_len = HIMAX_LINE_LEN_PCK_QQVGA;
+    }
+    ret |= get_vt_pix_clk(sensor, &vt_pix_clk);
+    ret |= cambus_readb2(&sensor->bus, sensor->slv_addr, INTEGRATION_H, &((uint8_t*)&coarse_int)[1]);
+    ret |= cambus_readb2(&sensor->bus, sensor->slv_addr, INTEGRATION_L, &((uint8_t*)&coarse_int)[0]);
+    *exposure_us = fast_roundf(coarse_int * line_len / (vt_pix_clk / 1000000.0f));
+    return ret;
 }
 
 static int set_hmirror(sensor_t *sensor, int enable)
@@ -394,6 +475,60 @@ static int set_vflip(sensor_t *sensor, int enable)
     return ret;
 }
 
+static int ioctl(sensor_t *sensor, int request, va_list ap)
+{
+    int ret = 0;
+
+    switch (request) {
+        case IOCTL_HIMAX_OSC_ENABLE: {
+            uint32_t enable = va_arg(ap, uint32_t);
+            ret = cambus_writeb2(&sensor->bus, sensor->slv_addr, ANA_Register_17, enable ? 1:0);
+            mp_hal_delay_ms(100);
+            break;
+        }
+
+        case IOCTL_HIMAX_MD_ENABLE: {
+            uint32_t enable = va_arg(ap, uint32_t);
+            ret = cambus_writeb2(&sensor->bus, sensor->slv_addr, MD_CTRL, enable ? 1:0);
+            break;
+        }
+
+        case IOCTL_HIMAX_MD_WINDOW: {
+            uint32_t x1 = va_arg(ap, uint32_t);
+            uint32_t y1 = va_arg(ap, uint32_t);
+            uint32_t x2 = va_arg(ap, uint32_t) + x1;
+            uint32_t y2 = va_arg(ap, uint32_t) + y1;
+            ret |= cambus_writeb2(&sensor->bus, sensor->slv_addr, MD_LROI_X_START_H, (x1>>8));
+            ret |= cambus_writeb2(&sensor->bus, sensor->slv_addr, MD_LROI_X_START_L, (x1&0xff));
+            ret |= cambus_writeb2(&sensor->bus, sensor->slv_addr, MD_LROI_Y_START_H, (y1>>8));
+            ret |= cambus_writeb2(&sensor->bus, sensor->slv_addr, MD_LROI_Y_START_L, (y1&0xff));
+            ret |= cambus_writeb2(&sensor->bus, sensor->slv_addr, MD_LROI_X_END_H,   (x2>>8));
+            ret |= cambus_writeb2(&sensor->bus, sensor->slv_addr, MD_LROI_X_END_L,   (x2&0xff));
+            ret |= cambus_writeb2(&sensor->bus, sensor->slv_addr, MD_LROI_Y_END_H,   (y2>>8));
+            ret |= cambus_writeb2(&sensor->bus, sensor->slv_addr, MD_LROI_Y_END_L,   (y2&0xff));
+            break;
+        }
+
+        case IOCTL_HIMAX_MD_THRESHOLD: {
+            uint32_t threshold = va_arg(ap, uint32_t);
+            ret = cambus_writeb2(&sensor->bus, sensor->slv_addr, MD_THL, threshold);
+            break;
+        }
+
+        case IOCTL_HIMAX_MD_CLEAR: {
+            ret = cambus_writeb2(&sensor->bus, sensor->slv_addr, I2C_CLEAR, 1);
+            break;
+        }
+
+        default: {
+            ret = -1;
+            break;
+        }
+    }
+
+    return ret;
+}
+
 int hm01b0_init(sensor_t *sensor)
 {
     // Initialize sensor structure.
@@ -404,21 +539,16 @@ int hm01b0_init(sensor_t *sensor)
     sensor->set_pixformat       = set_pixformat;
     sensor->set_framesize       = set_framesize;
     sensor->set_framerate       = set_framerate;
-    sensor->set_contrast        = set_contrast;
     sensor->set_brightness      = set_brightness;
-    sensor->set_saturation      = set_saturation;
     sensor->set_gainceiling     = set_gainceiling;
-    sensor->set_quality         = set_quality;
     sensor->set_colorbar        = set_colorbar;
-    sensor->set_special_effect  = set_special_effect;
     sensor->set_auto_gain       = set_auto_gain;
     sensor->get_gain_db         = get_gain_db;
     sensor->set_auto_exposure   = set_auto_exposure;
     sensor->get_exposure_us     = get_exposure_us;
-    sensor->set_auto_whitebal   = set_auto_whitebal;
-    sensor->get_rgb_gain_db     = get_rgb_gain_db;
     sensor->set_hmirror         = set_hmirror;
     sensor->set_vflip           = set_vflip;
+    sensor->ioctl               = ioctl;
 
     // Set sensor flags
     SENSOR_HW_FLAGS_SET(sensor, SENSOR_HW_FLAGS_VSYNC, 0);

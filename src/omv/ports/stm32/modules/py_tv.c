@@ -18,6 +18,8 @@
 #include "omv_boardconfig.h"
 #include STM32_HAL_H
 
+#if MICROPY_PY_TV
+
 #define TV_WIDTH    352
 #define TV_HEIGHT   240
 #define TV_REFRESH  60
@@ -495,12 +497,48 @@ static void spi_config_init(bool triple_buffer)
         framebuffer_tail = 0;
 
         for (int i = 0; i < FRAMEBUFFER_COUNT; i++) {
-            framebuffers[i] = (uint16_t *) fb_alloc0(TV_WIDTH_RGB565 * TV_HEIGHT, FB_ALLOC_NO_HINT);
+            framebuffers[i] = (uint16_t *) fb_alloc0(TV_WIDTH_RGB565 * TV_HEIGHT, FB_ALLOC_CACHE_ALIGN);
         }
 
         dma_init(&spi_tx_dma, OMV_SPI_LCD_CONTROLLER->tx_dma_descr, DMA_MEMORY_TO_PERIPH, OMV_SPI_LCD_CONTROLLER->spi);
         OMV_SPI_LCD_CONTROLLER->spi->hdmatx = &spi_tx_dma;
         OMV_SPI_LCD_CONTROLLER->spi->hdmarx = NULL;
+#if defined(MCU_SERIES_H7)
+        spi_tx_dma.Init.PeriphDataAlignment = DMA_PDATAALIGN_WORD;
+#else
+        spi_tx_dma.Init.PeriphDataAlignment = DMA_PDATAALIGN_BYTE;
+#endif
+        spi_tx_dma.Init.MemDataAlignment = DMA_MDATAALIGN_WORD;
+        spi_tx_dma.Init.FIFOMode = DMA_FIFOMODE_ENABLE;
+        spi_tx_dma.Init.FIFOThreshold = DMA_FIFO_THRESHOLD_FULL;
+        spi_tx_dma.Init.MemBurst = DMA_MBURST_INC4;
+#if defined(MCU_SERIES_H7)
+        spi_tx_dma.Init.PeriphBurst = DMA_PBURST_INC4;
+#else
+        spi_tx_dma.Init.PeriphBurst = DMA_PBURST_SINGLE;
+#endif
+#if defined(MCU_SERIES_H7)
+        ((DMA_Stream_TypeDef *) spi_tx_dma.Instance)->CR =
+            (((DMA_Stream_TypeDef *) spi_tx_dma.Instance)->CR & ~DMA_SxCR_PSIZE_Msk) | DMA_PDATAALIGN_WORD;
+#else
+        ((DMA_Stream_TypeDef *) spi_tx_dma.Instance)->CR =
+            (((DMA_Stream_TypeDef *) spi_tx_dma.Instance)->CR & ~DMA_SxCR_PSIZE_Msk) | DMA_PDATAALIGN_BYTE;
+#endif
+        ((DMA_Stream_TypeDef *) spi_tx_dma.Instance)->CR =
+            (((DMA_Stream_TypeDef *) spi_tx_dma.Instance)->CR & ~DMA_SxCR_MSIZE_Msk) | DMA_MDATAALIGN_WORD;
+        ((DMA_Stream_TypeDef *) spi_tx_dma.Instance)->FCR =
+            (((DMA_Stream_TypeDef *) spi_tx_dma.Instance)->FCR & ~DMA_SxFCR_DMDIS_Msk) | DMA_FIFOMODE_ENABLE;
+        ((DMA_Stream_TypeDef *) spi_tx_dma.Instance)->FCR =
+            (((DMA_Stream_TypeDef *) spi_tx_dma.Instance)->FCR & ~DMA_SxFCR_FTH_Msk) | DMA_FIFO_THRESHOLD_FULL;
+        ((DMA_Stream_TypeDef *) spi_tx_dma.Instance)->CR =
+            (((DMA_Stream_TypeDef *) spi_tx_dma.Instance)->CR & ~DMA_SxCR_MBURST_Msk) | DMA_MBURST_INC4;
+#if defined(MCU_SERIES_H7)
+        ((DMA_Stream_TypeDef *) spi_tx_dma.Instance)->CR =
+            (((DMA_Stream_TypeDef *) spi_tx_dma.Instance)->CR & ~DMA_SxCR_PBURST_Msk) | DMA_PBURST_INC4;
+#else
+        ((DMA_Stream_TypeDef *) spi_tx_dma.Instance)->CR =
+            (((DMA_Stream_TypeDef *) spi_tx_dma.Instance)->CR & ~DMA_SxCR_PBURST_Msk) | DMA_PBURST_SINGLE;
+#endif
         fb_alloc_mark_permanent();
     }
 }
@@ -525,6 +563,10 @@ static void spi_tv_callback(SPI_HandleTypeDef *hspi)
                 spi_tx_cb_state_memory_write_addr = (uint8_t *) framebuffers[framebuffer_head];
                 spi_tx_cb_state_memory_write_count = PICLINE_LENGTH_BYTES * TV_HEIGHT;
                 framebuffer_tail = framebuffer_head;
+#if defined(MCU_SERIES_H7)
+                OMV_SPI_LCD_CONTROLLER->spi->Instance->CFG1 =
+                    (OMV_SPI_LCD_CONTROLLER->spi->Instance->CFG1 & ~SPI_CFG1_FTHLV_Msk) | SPI_FIFO_THRESHOLD_01DATA;
+#endif
                 OMV_SPI_LCD_CS_LOW();
                 // When starting the interrupt chain the first HAL_SPI_Transmit_IT is not executed
                 // in interrupt context. So, disable interrupts for the first HAL_SPI_Transmit_IT so
@@ -537,12 +579,16 @@ static void spi_tv_callback(SPI_HandleTypeDef *hspi)
             }
             case SPI_TX_CB_MEMORY_WRITE: {
                 uint8_t *addr = spi_tx_cb_state_memory_write_addr;
-                size_t count = IM_MIN(spi_tx_cb_state_memory_write_count, 65535);
-                spi_tx_cb_state = (spi_tx_cb_state_memory_write_count > 65535)
+                size_t count = IM_MIN(spi_tx_cb_state_memory_write_count, (65536-16));
+                spi_tx_cb_state = (spi_tx_cb_state_memory_write_count > (65536-16))
                         ? SPI_TX_CB_MEMORY_WRITE
                         : SPI_TX_CB_MEMORY_WRITE_CMD;
                 spi_tx_cb_state_memory_write_addr += count;
                 spi_tx_cb_state_memory_write_count -= count;
+#if defined(MCU_SERIES_H7)
+                OMV_SPI_LCD_CONTROLLER->spi->Instance->CFG1 =
+                    (OMV_SPI_LCD_CONTROLLER->spi->Instance->CFG1 & ~SPI_CFG1_FTHLV_Msk) | SPI_FIFO_THRESHOLD_16DATA;
+#endif
                 HAL_SPI_Transmit_DMA(OMV_SPI_LCD_CONTROLLER->spi, addr, count);
                 break;
             }
@@ -576,17 +622,14 @@ static void spi_tv_draw_image_cb_convert_rgb565(uint16_t *row_pointer_i, uint8_t
         int g_pixels = ((pixels >> 3) & 0xfc00fc) | ((pixels >> 9) & 0x30003);
         int b_pixels = ((pixels << 3) & 0xf800f8) | ((pixels >> 2) & 0x70007);
 
-        int r_b_0 = __PKHBT(r_pixels, b_pixels, 16), r_b_1 = __PKHTB(b_pixels, r_pixels, 16);
-        int g_0 = g_pixels & 0xff, g_1 = (g_pixels >> 16) & 0xff;
+        int y = ((r_pixels * 38) + (g_pixels * 75) + (b_pixels * 15)) >> 7;
+        int u = __SSUB16(b_pixels * 64, (r_pixels * 21) + (g_pixels * 43));
+        int v = __SSUB16(r_pixels * 64, (g_pixels * 54) + (b_pixels * 10));
 
-        int y0 = __SMLAD(r_b_0, (15 << 16) | 38, g_0 * 75) >> 7;
-        int y1 = __SMLAD(r_b_1, (15 << 16) | 38, g_1 * 75) >> 7;
+        int y0 = __UXTB_RORn(y, 0), y1 = __UXTB_RORn(y, 16);
 
-        int u0 = __SMLAD(r_b_0, (64 << 16) | (-21 & 0xffff), g_0 * -43) >> 7;
-        int u1 = __SMLAD(r_b_1, (64 << 16) | (-21 & 0xffff), g_1 * -43) >> 7;
-
-        int v0 = __SMLAD(r_b_0, (-10 << 16) | 64, g_0 * -54) >> 7;
-        int v1 = __SMLAD(r_b_1, (-10 << 16) | 64, g_1 * -54) >> 7;
+        int u_avg = __SMUAD(u, 0x00010001) >> 7;
+        int v_avg = __SMUAD(v, 0x00010001) >> 7;
 
         #else
 
@@ -606,10 +649,11 @@ static void spi_tv_draw_image_cb_convert_rgb565(uint16_t *row_pointer_i, uint8_t
         int u1 = COLOR_RGB888_TO_U(r1, g1, b1);
         int v1 = COLOR_RGB888_TO_V(r1, g1, b1);
 
-        #endif
-
         int u_avg = u0 + u1;
         int v_avg = v0 + v1;
+
+        #endif
+
         int uv = ((u_avg >> 1) & 0xf0) | (((-v_avg) >> 5) & 0xf);
 
         IMAGE_PUT_GRAYSCALE_PIXEL_FAST(row_pointer_o, j, uv);
@@ -1063,3 +1107,5 @@ void py_tv_init0()
 {
     py_tv_deinit();
 }
+
+#endif // MICROPY_PY_TV

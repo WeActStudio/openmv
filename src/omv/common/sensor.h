@@ -1,8 +1,8 @@
 /*
  * This file is part of the OpenMV project.
  *
- * Copyright (c) 2013-2019 Ibrahim Abdelkader <iabdalkader@openmv.io>
- * Copyright (c) 2013-2019 Kwabena W. Agyeman <kwagyeman@openmv.io>
+ * Copyright (c) 2013-2021 Ibrahim Abdelkader <iabdalkader@openmv.io>
+ * Copyright (c) 2013-2021 Kwabena W. Agyeman <kwagyeman@openmv.io>
  *
  * This work is licensed under the MIT license, see the file LICENSE for details.
  *
@@ -29,6 +29,7 @@
 // Chip ID Values
 #define OV2640_ID           (0x26)
 #define OV5640_ID           (0x56)
+#define OV7670_ID           (0x76)
 #define OV7690_ID           (0x76)
 #define OV7725_ID           (0x77)
 #define OV9650_ID           (0x96)
@@ -59,6 +60,7 @@ typedef enum {
     FRAMESIZE_64X64,    // 64x64
     FRAMESIZE_128X64,   // 128x64
     FRAMESIZE_128X128,  // 128x128
+    FRAMESIZE_320X320,  // 320x320
     // Other
     FRAMESIZE_LCD,      // 128x160
     FRAMESIZE_QQVGA2,   // 128x160
@@ -125,7 +127,12 @@ typedef enum {
     IOCTL_LEPTON_SET_MEASUREMENT_MODE,
     IOCTL_LEPTON_GET_MEASUREMENT_MODE,
     IOCTL_LEPTON_SET_MEASUREMENT_RANGE,
-    IOCTL_LEPTON_GET_MEASUREMENT_RANGE
+    IOCTL_LEPTON_GET_MEASUREMENT_RANGE,
+    IOCTL_HIMAX_MD_ENABLE,
+    IOCTL_HIMAX_MD_CLEAR,
+    IOCTL_HIMAX_MD_WINDOW,
+    IOCTL_HIMAX_MD_THRESHOLD,
+    IOCTL_HIMAX_OSC_ENABLE,
 } ioctl_t;
 
 #define SENSOR_HW_FLAGS_VSYNC        (0) // vertical sync polarity.
@@ -139,6 +146,7 @@ typedef enum {
 #define SENSOR_HW_FLAGS_CLR(s, x)    ((s)->hw_flags &= ~(1<<x))
 
 typedef bool (*streaming_cb_t)(image_t *image);
+typedef void (*vsync_cb_t)(uint32_t vsync);
 
 typedef struct _sensor sensor_t;
 typedef struct _sensor {
@@ -148,9 +156,7 @@ typedef struct _sensor {
     uint32_t hw_flags;          // Hardware flags (clock polarities/hw capabilities)
     const uint16_t *color_palette;    // Color palette used for color lookup.
 
-    uint32_t vsync_pin;         // VSYNC GPIO output pin.
-    GPIO_TypeDef *vsync_gpio;   // VSYNC GPIO output port.
-
+    vsync_cb_t vsync_callback;  // VSYNC callback.
     polarity_t pwdn_pol;        // PWDN polarity (TODO move to hw_flags)
     polarity_t reset_pol;       // Reset polarity (TODO move to hw_flags)
 
@@ -308,8 +314,8 @@ int sensor_set_lens_correction(int enable, int radi, int coef);
 // IOCTL function
 int sensor_ioctl(int request, ...);
 
-// Set vsync output pin
-int sensor_set_vsync_output(GPIO_TypeDef *gpio, uint32_t pin);
+// Set vsync callback function.
+int sensor_set_vsync_callback(vsync_cb_t vsync_cb);
 
 // Set color palette
 int sensor_set_color_palette(const uint16_t *color_palette);

@@ -1,8 +1,8 @@
 /*
  * This file is part of the OpenMV project.
  *
- * Copyright (c) 2013-2019 Ibrahim Abdelkader <iabdalkader@openmv.io>
- * Copyright (c) 2013-2019 Kwabena W. Agyeman <kwagyeman@openmv.io>
+ * Copyright (c) 2013-2021 Ibrahim Abdelkader <iabdalkader@openmv.io>
+ * Copyright (c) 2013-2021 Kwabena W. Agyeman <kwagyeman@openmv.io>
  *
  * This work is licensed under the MIT license, see the file LICENSE for details.
  *
@@ -80,6 +80,16 @@
 #define         MD_THM1                         0x2159
 #define         MD_THM2                         0x215A
 #define         MD_THL                          0x215B
+#define         STATISTIC_CTRL                  0x2000
+#define         MD_LROI_X_START_H               0x2011
+#define         MD_LROI_X_START_L               0x2012
+#define         MD_LROI_Y_START_H               0x2013
+#define         MD_LROI_Y_START_L               0x2014
+#define         MD_LROI_X_END_H                 0x2015
+#define         MD_LROI_X_END_L                 0x2016
+#define         MD_LROI_Y_END_H                 0x2017
+#define         MD_LROI_Y_END_L                 0x2018
+#define         MD_INTERRUPT                    0x2160
 //  Sensor timing control
 #define         QVGA_WIN_EN                     0x3010
 #define         SIX_BIT_MODE_EN                 0x3011

@@ -1,8 +1,8 @@
 /*
  * This file is part of the OpenMV project.
  *
- * Copyright (c) 2013-2019 Ibrahim Abdelkader <iabdalkader@openmv.io>
- * Copyright (c) 2013-2019 Kwabena W. Agyeman <kwagyeman@openmv.io>
+ * Copyright (c) 2013-2021 Ibrahim Abdelkader <iabdalkader@openmv.io>
+ * Copyright (c) 2013-2021 Kwabena W. Agyeman <kwagyeman@openmv.io>
  *
  * This work is licensed under the MIT license, see the file LICENSE for details.
  *
@@ -18,6 +18,7 @@
 #include "ov2640.h"
 #include "ov5640.h"
 #include "ov7725.h"
+#include "ov7670.h"
 #include "ov7690.h"
 #include "ov9650.h"
 #include "mt9v034.h"
@@ -66,6 +67,7 @@ const int resolution[][2] = {
     {64,   64  },    /* 64x64     */
     {128,  64  },    /* 128x64    */
     {128,  128 },    /* 128x128   */
+    {320,  320 },    /* 128x128   */
     // Other
     {128,  160 },    /* LCD       */
     {128,  160 },    /* QQVGA2    */
@@ -233,12 +235,12 @@ void sensor_init0()
 {
     dcmi_abort();
 
-    #if defined(PORTENTA) || defined(OPENMVPT)
-    // These boards use the same I2C bus for the sensor and
-    // user scripts. The I2C bus must be reinitialized on soft-reset.
+    // Always reinit cambus after soft reset which could have terminated the cambus in the middle
+    // of an I2C read/write.
     cambus_init(&sensor.bus, ISC_I2C_ID, ISC_I2C_SPEED);
-    #endif
 
+    // Disable VSYNC IRQ and callback
+    sensor_set_vsync_callback(NULL);
 }
 
 int sensor_init()
@@ -353,7 +355,7 @@ int sensor_init()
         case OV5640_SLV_ADDR:
             cambus_readb2(&sensor.bus, sensor.slv_addr, OV5640_CHIP_ID, &sensor.chip_id);
             break;
-        case OV7725_SLV_ADDR: // Or OV7690.
+        case OV7725_SLV_ADDR: // Or OV7690 or OV7670.
             cambus_readb(&sensor.bus, sensor.slv_addr, OV_CHIP_ID, &sensor.chip_id);
             break;
         case MT9V034_SLV_ADDR:
@@ -388,6 +390,15 @@ int sensor_init()
             init_ret = ov5640_init(&sensor);
             break;
         #endif // (OMV_ENABLE_OV5640 == 1)
+
+        #if (OMV_ENABLE_OV7670 == 1)
+        case OV7670_ID:
+            if (extclk_config(OV7670_XCLK_FREQ) != 0) {
+                return -3;
+            }
+            init_ret = ov7670_init(&sensor);
+            break;
+        #endif // (OMV_ENABLE_OV7670 == 1)
 
         #if (OMV_ENABLE_OV7690 == 1)
         case OV7690_ID:
@@ -491,7 +502,7 @@ int sensor_reset()
     #else
     sensor.auto_rotation = false;
     #endif // MICROPY_PY_IMU
-    sensor.vsync_gpio    = NULL;
+    sensor.vsync_callback= NULL;
 
     // Reset default color palette.
     sensor.color_palette = rainbow_table;
@@ -959,13 +970,17 @@ int sensor_ioctl(int request, ... /* arg */)
     return ret;
 }
 
-int sensor_set_vsync_output(GPIO_TypeDef *gpio, uint32_t pin)
+int sensor_set_vsync_callback(vsync_cb_t vsync_cb)
 {
-    sensor.vsync_pin  = pin;
-    sensor.vsync_gpio = gpio;
-    // Enable VSYNC EXTI IRQ
-    NVIC_SetPriority(DCMI_VSYNC_IRQN, IRQ_PRI_EXTINT);
-    HAL_NVIC_EnableIRQ(DCMI_VSYNC_IRQN);
+    sensor.vsync_callback = vsync_cb;
+    if (sensor.vsync_callback == NULL) {
+        // Disable VSYNC EXTI IRQ
+        HAL_NVIC_DisableIRQ(DCMI_VSYNC_IRQN);
+    } else {
+        // Enable VSYNC EXTI IRQ
+        NVIC_SetPriority(DCMI_VSYNC_IRQN, IRQ_PRI_EXTINT);
+        HAL_NVIC_EnableIRQ(DCMI_VSYNC_IRQN);
+    }
     return 0;
 }
 
@@ -983,9 +998,8 @@ const uint16_t *sensor_get_color_palette()
 void DCMI_VsyncExtiCallback()
 {
     __HAL_GPIO_EXTI_CLEAR_FLAG(1 << DCMI_VSYNC_IRQ_LINE);
-    if (sensor.vsync_gpio != NULL) {
-        HAL_GPIO_WritePin(sensor.vsync_gpio, sensor.vsync_pin,
-                !HAL_GPIO_ReadPin(DCMI_VSYNC_PORT, DCMI_VSYNC_PIN));
+    if (sensor.vsync_callback != NULL) {
+        sensor.vsync_callback(HAL_GPIO_ReadPin(DCMI_VSYNC_PORT, DCMI_VSYNC_PIN));
     }
 }
 
@@ -1518,12 +1532,8 @@ int sensor_snapshot(sensor_t *sensor, image_t *image, streaming_cb_t streaming_c
                     SCB_InvalidateDCache_by_Addr((uint32_t*)MAIN_FB()->pixels, size);
                     #endif
                 }
-                // Clean trailing data.
-                while ((MAIN_FB()->bpp >= 2)
-                   && ((MAIN_FB()->pixels[MAIN_FB()->bpp-2] != 0xFF)
-                    || (MAIN_FB()->pixels[MAIN_FB()->bpp-1] != 0xD9))) {
-                    MAIN_FB()->bpp -= 1;
-                }
+                // Clean trailing data after 0xFFD9 at the end of the jpeg byte stream.
+                MAIN_FB()->bpp = jpeg_clean_trailing_bytes(MAIN_FB()->bpp, MAIN_FB()->pixels);
                 break;
             default:
                 break;

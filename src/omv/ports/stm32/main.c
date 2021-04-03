@@ -1,8 +1,8 @@
 /*
  * This file is part of the OpenMV project.
  *
- * Copyright (c) 2013-2019 Ibrahim Abdelkader <iabdalkader@openmv.io>
- * Copyright (c) 2013-2019 Kwabena W. Agyeman <kwagyeman@openmv.io>
+ * Copyright (c) 2013-2021 Ibrahim Abdelkader <iabdalkader@openmv.io>
+ * Copyright (c) 2013-2021 Kwabena W. Agyeman <kwagyeman@openmv.io>
  *
  * This work is licensed under the MIT license, see the file LICENSE for details.
  *
@@ -59,6 +59,7 @@
 #include "wifidbg.h"
 #include "sdram.h"
 #include "fb_alloc.h"
+#include "dma_alloc.h"
 #include "ff_wrapper.h"
 
 #include "usbd_core.h"
@@ -70,6 +71,7 @@
 #include "py_lcd.h"
 #include "py_fir.h"
 #include "py_tv.h"
+#include "py_buzzer.h"
 #include "py_imu.h"
 #include "py_audio.h"
 
@@ -482,6 +484,11 @@ soft_reset:
     // GC init
     gc_init(&_heap_start, &_heap_end);
 
+    #if MICROPY_ENABLE_PYSTACK
+    static mp_obj_t pystack[384];
+    mp_pystack_init(pystack, &pystack[384]);
+    #endif
+
     // Micro Python init
     mp_init();
     mp_obj_list_init(mp_sys_path, 0);
@@ -489,9 +496,17 @@ soft_reset:
 
     // Initialise low-level sub-systems. Here we need to do the very basic
     // things like zeroing out memory and resetting any of the sub-systems.
+    #if MICROPY_PY_LCD
     py_lcd_init0();
+    #endif
     py_fir_init0();
+    #if MICROPY_PY_TV
     py_tv_init0();
+    #endif
+    #if MICROPY_PY_BUZZER
+    py_buzzer_init0();
+    #endif // MICROPY_PY_BUZZER
+    imlib_init_all();
     readline_init0();
     pin_init0();
     extint_init0();
@@ -505,6 +520,7 @@ soft_reset:
     sensor_init0();
     framebuffer_init0();
     fb_alloc_init0();
+    dma_alloc_init0();
     #ifdef IMLIB_ENABLE_IMAGE_FILE_IO
     file_buffer_init0();
     #endif
@@ -748,9 +764,7 @@ soft_reset:
     #if MICROPY_PY_AUDIO
     py_audio_deinit();
     #endif
-    #ifdef IMLIB_ENABLE_DMA2D
-    imlib_draw_row_deinit_all();
-    #endif
+    imlib_deinit_all();
     first_soft_reset = false;
     goto soft_reset;
 }
