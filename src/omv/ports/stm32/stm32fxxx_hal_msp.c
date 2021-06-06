@@ -250,6 +250,39 @@ void HAL_MspInit(void)
     #endif
 
     #endif // DCMI_RESET_PIN || DCMI_PWDN_PIN || DCMI_FSYNC_PIN
+
+    #if defined(OMV_FIR_LEPTON_RST_PIN_PRESENT)
+    GPIO_InitTypeDef fir_lepton_rst_pin;
+    fir_lepton_rst_pin.Speed = GPIO_SPEED_LOW;
+    fir_lepton_rst_pin.Mode = GPIO_MODE_OUTPUT_PP;
+    fir_lepton_rst_pin.Pin = OMV_FIR_LEPTON_RST_PIN;
+    fir_lepton_rst_pin.Pull = GPIO_NOPULL;
+    HAL_GPIO_Init(OMV_FIR_LEPTON_RST_PORT, &fir_lepton_rst_pin);
+    OMV_FIR_LEPTON_RST_LOW();
+    #endif
+
+    #if defined(OMV_FIR_LEPTON_PWDN_PIN_PRESENT)
+    GPIO_InitTypeDef fir_lepton_pwdn_pin;
+    fir_lepton_pwdn_pin.Speed = GPIO_SPEED_LOW;
+    fir_lepton_pwdn_pin.Mode = GPIO_MODE_OUTPUT_PP;
+    fir_lepton_pwdn_pin.Pin = OMV_FIR_LEPTON_PWDN_PIN;
+    fir_lepton_pwdn_pin.Pull = GPIO_NOPULL;
+    HAL_GPIO_Init(OMV_FIR_LEPTON_PWDN_PORT, &fir_lepton_pwdn_pin);
+    OMV_FIR_LEPTON_PWDN_LOW();
+    #endif
+
+    #if defined(MCU_SERIES_H7)
+    // This disconnects PA0/PA1 from PA0_C/PA1_C.
+    // PA0_C/PA1_C connect to ADC1/2 Channels P0/P1
+    HAL_SYSCFG_AnalogSwitchConfig(SYSCFG_SWITCH_PA0, SYSCFG_SWITCH_PA0_OPEN);
+    HAL_SYSCFG_AnalogSwitchConfig(SYSCFG_SWITCH_PA1, SYSCFG_SWITCH_PA1_OPEN);
+    // This connects PC2/PC3 from PC2_C/PC3_C.
+    // PC2_C/PC3_C connect to ADC3 Channels P0/P1.
+    // PC2_C is connected to the blue LED on the OpenMV Cam H7.
+    // PC3_C is unused.
+    HAL_SYSCFG_AnalogSwitchConfig(SYSCFG_SWITCH_PC2, SYSCFG_SWITCH_PC2_CLOSE);
+    HAL_SYSCFG_AnalogSwitchConfig(SYSCFG_SWITCH_PC3, SYSCFG_SWITCH_PC3_CLOSE);
+    #endif
 }
 
 void HAL_I2C_MspInit(I2C_HandleTypeDef *hi2c)

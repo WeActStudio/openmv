@@ -116,6 +116,7 @@ FIRM_OBJ += $(addprefix $(BUILD)/$(OMV_DIR)/sensors/,   \
 	ov7725.o                    \
 	ov9650.o                    \
 	mt9v034.o                   \
+	mt9m114.o                   \
 	lepton.o                    \
 	hm01b0.o                    \
    )
@@ -136,6 +137,7 @@ FIRM_OBJ += $(addprefix $(BUILD)/$(OMV_DIR)/modules/,   \
 FIRM_OBJ += $(addprefix $(BUILD)/$(OMV_DIR)/imlib/, \
 	agast.o                     \
 	apriltag.o                  \
+	bayer.o                     \
 	binary.o                    \
 	blob.o                      \
 	bmp.o                       \
@@ -181,7 +183,6 @@ FIRM_OBJ += $(addprefix $(BUILD)/$(OMV_DIR)/imlib/, \
 	stats.o                     \
 	template.o                  \
 	xyz_tab.o                   \
-	yuv_tab.o                   \
 	zbar.o                      \
    )
 

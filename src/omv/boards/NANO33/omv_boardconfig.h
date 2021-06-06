@@ -29,12 +29,6 @@
 // Sensor external clock timer frequency.
 #define OMV_XCLK_FREQUENCY      (12000000)
 
-// Sensor PLL register value.
-#define OMV_OV7725_PLL_CONFIG   (0x41)  // x4
-
-// Sensor Banding Filter Value
-#define OMV_OV7725_BANDING      (0x7F)
-
 // RAW buffer size
 #define OMV_RAW_BUF_SIZE        (131072)
 
@@ -52,11 +46,17 @@
 #define OMV_ENABLE_LEPTON       (0)
 #define OMV_ENABLE_HM01B0       (0)
 
+// Set which OV767x sensor is used
+#define OMV_OV7670_VERSION      (75)
+
+// OV7670 clock divider
+#define OMV_OV7670_CLKRC        (0x01)
+
 // Enable sensor features
 #define OMV_ENABLE_OV5640_AF    (0)
 
 // Enable WiFi debug
-#define OMV_ENABLE_WIFIDBG      (1)
+#define OMV_ENABLE_WIFIDBG      (0)
 
 // Enable self-tests on first boot
 #define OMV_ENABLE_SELFTEST     (0)

@@ -11,20 +11,24 @@
 #ifndef __SENSOR_H__
 #define __SENSOR_H__
 #include <stdarg.h>
+#include "cambus.h"
 #include "imlib.h"
 
 #define OV2640_SLV_ADDR     (0x60)
 #define OV5640_SLV_ADDR     (0x78)
 #define OV7725_SLV_ADDR     (0x42)
 #define MT9V034_SLV_ADDR    (0xB8)
+#define MT9M114_SLV_ADDR    (0x90)
 #define LEPTON_SLV_ADDR     (0x54)
 #define HM01B0_SLV_ADDR     (0x48)
+#define GC2145_SLV_ADDR     (0x78)
 
 // Chip ID Registers
 #define OV5640_CHIP_ID      (0x300A)
 #define OV_CHIP_ID          (0x0A)
 #define ON_CHIP_ID          (0x00)
 #define HIMAX_CHIP_ID       (0x0001)
+#define GC_CHIP_ID          (0xF0)
 
 // Chip ID Values
 #define OV2640_ID           (0x26)
@@ -34,8 +38,10 @@
 #define OV7725_ID           (0x77)
 #define OV9650_ID           (0x96)
 #define MT9V034_ID          (0x13)
+#define MT9M114_ID          (0x81)
 #define LEPTON_ID           (0x54)
 #define HM01B0_ID           (0xB0)
+#define GC2145_ID           (0x21)
 
 typedef enum {
     FRAMESIZE_INVALID = 0,
@@ -145,18 +151,22 @@ typedef enum {
 #define SENSOR_HW_FLAGS_SET(s, x, v) ((s)->hw_flags |= (v<<x))
 #define SENSOR_HW_FLAGS_CLR(s, x)    ((s)->hw_flags &= ~(1<<x))
 
-typedef bool (*streaming_cb_t)(image_t *image);
 typedef void (*vsync_cb_t)(uint32_t vsync);
+typedef void (*frame_cb_t)();
 
 typedef struct _sensor sensor_t;
 typedef struct _sensor {
+    union {
     uint8_t  chip_id;           // Sensor ID.
+    uint16_t chip_id_w;         // Sensor ID 16 bits.
+    };
     uint8_t  slv_addr;          // Sensor I2C slave address.
     uint16_t gs_bpp;            // Grayscale bytes per pixel.
     uint32_t hw_flags;          // Hardware flags (clock polarities/hw capabilities)
     const uint16_t *color_palette;    // Color palette used for color lookup.
 
     vsync_cb_t vsync_callback;  // VSYNC callback.
+    frame_cb_t frame_callback;  // Frame callback.
     polarity_t pwdn_pol;        // PWDN polarity (TODO move to hw_flags)
     polarity_t reset_pol;       // Reset polarity (TODO move to hw_flags)
 
@@ -199,7 +209,7 @@ typedef struct _sensor {
     int  (*set_special_effect)  (sensor_t *sensor, sde_t sde);
     int  (*set_lens_correction) (sensor_t *sensor, int enable, int radi, int coef);
     int  (*ioctl)               (sensor_t *sensor, int request, va_list ap);
-    int  (*snapshot)            (sensor_t *sensor, image_t *image, streaming_cb_t streaming_cb);
+    int  (*snapshot)            (sensor_t *sensor, image_t *image, uint32_t flags);
 } sensor_t;
 
 // Resolution table
@@ -305,6 +315,9 @@ int sensor_set_auto_rotation(bool enable);
 // Get transpose mode state.
 bool sensor_get_auto_rotation();
 
+// Set the number of virtual frame buffers.
+int sensor_set_framebuffers(int count);
+
 // Set special digital effects (SDE).
 int sensor_set_special_effect(sde_t sde);
 
@@ -317,6 +330,9 @@ int sensor_ioctl(int request, ...);
 // Set vsync callback function.
 int sensor_set_vsync_callback(vsync_cb_t vsync_cb);
 
+// Set frame callback function.
+int sensor_set_frame_callback(frame_cb_t vsync_cb);
+
 // Set color palette
 int sensor_set_color_palette(const uint16_t *color_palette);
 
@@ -324,5 +340,6 @@ int sensor_set_color_palette(const uint16_t *color_palette);
 const uint16_t *sensor_get_color_palette();
 
 // Default snapshot function.
-int sensor_snapshot(sensor_t *sensor, image_t *image, streaming_cb_t streaming_cb);
+int sensor_snapshot(sensor_t *sensor, image_t *image, uint32_t flags);
+
 #endif /* __SENSOR_H__ */

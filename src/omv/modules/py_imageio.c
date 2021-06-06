@@ -155,10 +155,6 @@ mp_obj_t py_imageio_read(uint n_args, const mp_obj_t *args, mp_map_t *kw_args)
         }
     }
 
-    if (copy_to_fb) {
-        fb_update_jpeg_buffer();
-    }
-
     if (0) {
     #if defined(IMLIB_ENABLE_IMAGE_FILE_IO)
     } else if (stream->type == IMAGE_IO_FILE_STREAM) {
@@ -180,7 +176,7 @@ mp_obj_t py_imageio_read(uint n_args, const mp_obj_t *args, mp_map_t *kw_args)
         uint32_t ms = 0, ms_tmp;
         read_long(fp, &ms_tmp);
 
-        if (!py_helper_keyword_int(n_args, args, 3, kw_args, MP_OBJ_NEW_QSTR(MP_QSTR_pause), true)) {
+        if (py_helper_keyword_int(n_args, args, 3, kw_args, MP_OBJ_NEW_QSTR(MP_QSTR_pause), true)) {
             for (ms = mp_hal_ticks_ms();
                     ((ms - stream->ms) < ms_tmp);
                     ms = mp_hal_ticks_ms()) {
@@ -253,6 +249,10 @@ mp_obj_t py_imageio_read(uint n_args, const mp_obj_t *args, mp_map_t *kw_args)
         stream->offset += 1;
     } else {
         mp_raise_msg(&mp_type_OSError, MP_ERROR_TEXT("Invalid image stream"));
+    }
+
+    if (copy_to_fb) {
+        framebuffer_update_jpeg_buffer();
     }
 
     return py_image_from_struct(&image);

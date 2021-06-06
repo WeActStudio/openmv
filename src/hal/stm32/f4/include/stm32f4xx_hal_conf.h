@@ -297,6 +297,7 @@
 
 #ifdef HAL_ADC_MODULE_ENABLED
   #include "stm32f4xx_hal_adc.h"
+  #include "stm32f4xx_ll_adc.h"
 #endif /* HAL_ADC_MODULE_ENABLED */
 
 #ifdef HAL_CAN_MODULE_ENABLED
@@ -389,6 +390,7 @@
 
 #ifdef HAL_RTC_MODULE_ENABLED
  #include "stm32f4xx_hal_rtc.h"
+ #include "stm32f4xx_ll_rtc.h"
 #endif /* HAL_RTC_MODULE_ENABLED */
 
 #ifdef HAL_SAI_MODULE_ENABLED
@@ -413,6 +415,7 @@
 
 #ifdef HAL_USART_MODULE_ENABLED
  #include "stm32f4xx_hal_usart.h"
+ #include "stm32f4xx_ll_usart.h"
 #endif /* HAL_USART_MODULE_ENABLED */
 
 #ifdef HAL_IRDA_MODULE_ENABLED

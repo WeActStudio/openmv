@@ -33,8 +33,10 @@ SRCS += $(addprefix sensors/,   \
 	ov7725.c                    \
 	ov9650.c                    \
 	mt9v034.c                   \
+	mt9m114.c                   \
 	lepton.c                    \
 	hm01b0.c                    \
+	gc2145.c                    \
    )
 
 SRCS += $(addprefix modules/,   \
@@ -53,6 +55,7 @@ SRCS += $(addprefix modules/,   \
 SRCS += $(addprefix imlib/,     \
 	agast.c                     \
 	apriltag.c                  \
+	bayer.c                     \
 	binary.c                    \
 	blob.c                      \
 	bmp.c                       \
@@ -98,7 +101,6 @@ SRCS += $(addprefix imlib/,     \
 	stats.c                     \
 	template.c                  \
 	xyz_tab.c                   \
-	yuv_tab.c                   \
 	zbar.c                      \
    )
 

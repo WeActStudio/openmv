@@ -268,6 +268,12 @@ int sensor_init()
             break;
         #endif //(OMV_ENABLE_MT9V034 == 1)
 
+        #if (OMV_ENABLE_MT9M114 == 1)
+        case MT9M114_SLV_ADDR:
+            cambus_readw2(&sensor.bus, sensor.slv_addr, ON_CHIP_ID, &sensor.chip_id_w);
+            break;
+        #endif // (OMV_ENABLE_MT9M114 == 1)
+
         #if (OMV_ENABLE_LEPTON == 1)
         case LEPTON_SLV_ADDR:
             sensor.chip_id = LEPTON_ID;
@@ -342,6 +348,15 @@ int sensor_init()
             break;
         #endif //(OMV_ENABLE_MT9V034 == 1)
 
+        #if (OMV_ENABLE_MT9M114 == 1)
+        case MT9M114_ID:
+            if (extclk_config(MT9M114_XCLK_FREQ) != 0) {
+                return -3;
+            }
+            init_ret = mt9m114_init(&sensor);
+            break;
+        #endif //(OMV_ENABLE_MT9M114 == 1)
+
         #if (OMV_ENABLE_LEPTON == 1)
         case LEPTON_ID:
             if (extclk_config(LEPTON_XCLK_FREQ) != 0) {
@@ -392,6 +407,8 @@ int sensor_init()
 
 int sensor_reset()
 {
+    framebuffer_reset_buffers();
+
     // Reset the sensor state
     sensor.sde           = 0;
     sensor.pixformat     = 0;
@@ -407,6 +424,7 @@ int sensor_reset()
     sensor.auto_rotation = false;
     #endif // MICROPY_PY_IMU
     sensor.vsync_callback= NULL;
+    sensor.frame_callback= NULL;
 
     // Reset default color palette.
     sensor.color_palette = rainbow_table;
@@ -523,6 +541,9 @@ int sensor_set_pixformat(pixformat_t pixformat)
     //    return -1;
     //}
 
+    // Flush previous frame.
+    framebuffer_update_jpeg_buffer();
+
     if (sensor.set_pixformat == NULL
         || sensor.set_pixformat(&sensor, pixformat) != 0) {
         // Operation not supported
@@ -546,6 +567,9 @@ int sensor_set_framesize(framesize_t framesize)
         // No change
         return 0;
     }
+
+    // Flush previous frame.
+    framebuffer_update_jpeg_buffer();
 
     // Call the sensor specific function
     if (sensor.set_framesize == NULL
@@ -590,18 +614,25 @@ int sensor_set_framerate(int framerate)
 
 int sensor_set_windowing(int x, int y, int w, int h)
 {
-    // py_sensor_set_windowing ensures this the window is at least 8x8
-    // and that it is fully inside the sensor output framesize window.
+    if ((MAIN_FB()->x == x) && (MAIN_FB()->y == y) && (MAIN_FB()->u == w) && (MAIN_FB()->v == h)) {
+        // No change
+        return 0;
+    }
+
     if (sensor.pixformat == PIXFORMAT_JPEG) {
         return -1;
     }
 
-    // We force everything to be a multiple of 2 so that when you switch between
-    // grayscale/rgb565/bayer/jpeg the frame doesn't need to move around for bayer to work.
-    MAIN_FB()->x = (x / 2) * 2;
-    MAIN_FB()->y = (y / 2) * 2;
-    MAIN_FB()->w = MAIN_FB()->u = (w / 2) * 2;
-    MAIN_FB()->h = MAIN_FB()->v = (h / 2) * 2;
+    // Flush previous frame.
+    framebuffer_update_jpeg_buffer();
+
+    // Skip the first frame.
+    MAIN_FB()->bpp = -1;
+
+    MAIN_FB()->x = x;
+    MAIN_FB()->y = y;
+    MAIN_FB()->w = MAIN_FB()->u = w;
+    MAIN_FB()->h = MAIN_FB()->v = h;
 
     return 0;
 }
@@ -784,6 +815,11 @@ bool sensor_get_vflip()
 
 int sensor_set_transpose(bool enable)
 {
+    if (sensor.transpose == enable) {
+        /* no change */
+        return 0;
+    }
+
     if (sensor.pixformat == PIXFORMAT_JPEG) {
         return -1;
     }
@@ -799,6 +835,11 @@ bool sensor_get_transpose()
 
 int sensor_set_auto_rotation(bool enable)
 {
+    if (sensor.auto_rotation == enable) {
+        /* no change */
+        return 0;
+    }
+
     if (sensor.pixformat == PIXFORMAT_JPEG) {
         return -1;
     }
@@ -810,6 +851,14 @@ int sensor_set_auto_rotation(bool enable)
 bool sensor_get_auto_rotation()
 {
     return sensor.auto_rotation;
+}
+
+int sensor_set_framebuffers(int count)
+{
+    // Flush previous frame.
+    framebuffer_update_jpeg_buffer();
+
+    return framebuffer_set_buffers(count);
 }
 
 int sensor_set_special_effect(sde_t sde)
@@ -868,6 +917,12 @@ int sensor_set_vsync_callback(vsync_cb_t vsync_cb)
     return 0;
 }
 
+int sensor_set_frame_callback(frame_cb_t vsync_cb)
+{
+    sensor.frame_callback = vsync_cb;
+    return 0;
+}
+
 int sensor_set_color_palette(const uint16_t *color_palette)
 {
     sensor.color_palette = color_palette;
@@ -890,6 +945,10 @@ void VsyncExtiCallback()
 // within the RAM we have onboard the system.
 void sensor_check_buffsize()
 {
+    if (MAIN_FB()->n_buffers != 1) {
+        framebuffer_set_buffers(1);
+    }
+
     uint32_t size = framebuffer_get_buffer_size();
     uint32_t bpp;
 
@@ -984,9 +1043,21 @@ void sensor_check_buffsize()
 }
 
 // This is the default snapshot function, which can be replaced in sensor_init functions.
-int sensor_snapshot(sensor_t *sensor, image_t *image, streaming_cb_t streaming_cb)
+int sensor_snapshot(sensor_t *sensor, image_t *image, uint32_t flags)
 {
-    uint8_t *b = MAIN_FB()->pixels;
+    // Compress the framebuffer for the IDE preview, only if it's not the first frame,
+    // the framebuffer is enabled and the image sensor does not support JPEG encoding.
+    // Note: This doesn't run unless the IDE is connected and the framebuffer is enabled.
+    framebuffer_update_jpeg_buffer();
+
+    framebuffer_free_current_buffer();
+    vbuffer_t *buffer = framebuffer_get_tail(FB_NO_FLAGS);
+
+    if (!buffer) {
+        return -1;
+    }
+
+    uint8_t *b = buffer->data;
     uint32_t _width  = MAIN_FB()->w;
     uint32_t _height = MAIN_FB()->h;
     int bytesPerRow  = _width * 2; // Always read 2 BPP
@@ -994,11 +1065,6 @@ int sensor_snapshot(sensor_t *sensor, image_t *image, streaming_cb_t streaming_c
 
     uint32_t ulPin = 32; // P1.xx set of GPIO is in 'pin' 32 and above
     NRF_GPIO_Type *port = nrf_gpio_pin_port_decode(&ulPin);
-
-    // Compress the framebuffer for the IDE preview, only if it's not the first frame,
-    // the framebuffer is enabled and the image sensor does not support JPEG encoding.
-    // Note: This doesn't run unless the IDE is connected and the framebuffer is enabled.
-    fb_update_jpeg_buffer();
 
     noInterrupts();
 
@@ -1009,7 +1075,7 @@ int sensor_snapshot(sensor_t *sensor, image_t *image, streaming_cb_t streaming_c
     for (int i = 0; i < _height; i++) {
         // rising edge indicates start of line
         while ((*_hrefPort & _hrefMask) == 0); // wait for HIGH
-            
+
         for (int j = 0; j < bytesPerRow; j++) {
             // rising edges clock each data byte
             while ((*_pclkPort & _pclkMask) != 0); // wait for LOW
@@ -1030,6 +1096,11 @@ int sensor_snapshot(sensor_t *sensor, image_t *image, streaming_cb_t streaming_c
 
     interrupts();
 
+    // Not useful for the NRF but must call to keep API the same.
+    if (sensor->frame_callback) {
+        sensor->frame_callback();
+    }
+
     // Fix the BPP.
     switch (sensor->pixformat) {
         case PIXFORMAT_GRAYSCALE:
@@ -1039,7 +1110,7 @@ int sensor_snapshot(sensor_t *sensor, image_t *image, streaming_cb_t streaming_c
         case PIXFORMAT_RGB565: {
             MAIN_FB()->bpp = 2;
             if (SENSOR_HW_FLAGS_GET(sensor, SWNSOR_HW_FLAGS_RGB565_REV)) {
-                unaligned_memcpy_rev16(MAIN_FB()->pixels, MAIN_FB()->pixels, _width*_height);
+                unaligned_memcpy_rev16(buffer->data, buffer->data, _width*_height);
             }
             break;
         }
@@ -1056,7 +1127,8 @@ int sensor_snapshot(sensor_t *sensor, image_t *image, streaming_cb_t streaming_c
         image->w = MAIN_FB()->w;
         image->h = MAIN_FB()->h;
         image->bpp = MAIN_FB()->bpp;
-        image->pixels = MAIN_FB()->pixels;
+        image->pixels = buffer->data;
     }
+
     return 0;
 }

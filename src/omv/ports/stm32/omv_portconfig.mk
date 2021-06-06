@@ -5,7 +5,7 @@ LDSCRIPT  ?= stm32fxxx
 
 # Compiler Flags
 CFLAGS += -std=gnu99 -Wall -Werror -Warray-bounds -mthumb -nostartfiles -fdata-sections -ffunction-sections
-CFLAGS += -D$(MCU) -D$(CFLAGS_MCU) -D$(ARM_MATH) -DARM_NN_TRUNCATE\
+CFLAGS += -fno-inline-small-functions -D$(MCU) -D$(CFLAGS_MCU) -D$(ARM_MATH) -DARM_NN_TRUNCATE\
           -fsingle-precision-constant -Wdouble-promotion -mcpu=$(CPU) -mtune=$(CPU) -mfpu=$(FPU) -mfloat-abi=hard
 CFLAGS += -D__FPU_PRESENT=1 -D__VFP_FP__ -DUSE_USB_FS -DUSE_DEVICE_MODE -DUSE_USB_OTG_ID=0 -DHSE_VALUE=$(OMV_HSE_VALUE)\
           -D$(TARGET) -DVECT_TAB_OFFSET=$(VECT_TAB_OFFSET) -DMAIN_APP_ADDR=$(MAIN_APP_ADDR) -DSTM32_HAL_H=$(HAL_INC)
@@ -146,8 +146,10 @@ FIRM_OBJ += $(addprefix $(BUILD)/$(OMV_DIR)/sensors/,   \
 	ov7725.o                    \
 	ov9650.o                    \
 	mt9v034.o                   \
+	mt9m114.o                   \
 	lepton.o                    \
 	hm01b0.o                    \
+	gc2145.o                    \
    )
 
 FIRM_OBJ += $(addprefix $(BUILD)/$(OMV_DIR)/modules/,   \
@@ -166,6 +168,7 @@ FIRM_OBJ += $(addprefix $(BUILD)/$(OMV_DIR)/modules/,   \
 FIRM_OBJ += $(addprefix $(BUILD)/$(OMV_DIR)/imlib/, \
 	agast.o                     \
 	apriltag.o                  \
+	bayer.o                     \
 	binary.o                    \
 	blob.o                      \
 	bmp.o                       \
@@ -211,7 +214,6 @@ FIRM_OBJ += $(addprefix $(BUILD)/$(OMV_DIR)/imlib/, \
 	stats.o                     \
 	template.o                  \
 	xyz_tab.o                   \
-	yuv_tab.o                   \
 	zbar.o                      \
    )
 
@@ -443,6 +445,27 @@ FIRM_OBJ += $(addprefix $(BUILD)/$(MICROPY_DIR)/,\
 LIBS += $(MICROPY_DIR)/drivers/cyw43/libcyw43.a
 endif
 
+ifeq ($(MICROPY_BLUETOOTH_NIMBLE),1)
+FIRM_OBJ += $(addprefix $(BUILD)/$(MICROPY_DIR)/lib/mynewt-nimble/,\
+	ext/tinycrypt/src/*.o                   \
+	nimble/host/services/gap/src/*.o        \
+	nimble/host/services/gatt/src/*.o       \
+	nimble/host/src/*.o                     \
+	nimble/host/util/src/*.o                \
+	nimble/transport/uart/src/*.o           \
+	porting/nimble/src/*.o                  \
+	)
+
+FIRM_OBJ += $(addprefix $(BUILD)/$(MICROPY_DIR)/,\
+	mpbthciport.o                               \
+	mpnimbleport.o                              \
+	extmod/nimble/modbluetooth_nimble.o         \
+	extmod/nimble/nimble/nimble_npl_os.o        \
+	extmod/nimble/hal/hal_uart.o                \
+	extmod/modbluetooth.o                       \
+	)
+endif
+
 #------------- CubeAI Objects -------------------#
 ifeq ($(CUBEAI), 1)
 include $(TOP_DIR)/stm32cubeai/cube.mk
@@ -487,14 +510,15 @@ UVC_OBJ += $(addprefix $(BUILD)/$(OMV_DIR)/sensors/, \
 	ov7725.o                                \
 	ov9650.o                                \
 	mt9v034.o                               \
+	mt9m114.o                               \
 	lepton.o                                \
 	hm01b0.o                                \
+	gc2145.o                                \
 	)
 
 UVC_OBJ += $(addprefix $(BUILD)/$(OMV_DIR)/imlib/,\
 	lab_tab.o                               \
 	xyz_tab.o                               \
-	yuv_tab.o                               \
 	rainbow_tab.o                           \
 	jpeg.o                                  \
 	fmath.o                                 \

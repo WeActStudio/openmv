@@ -53,6 +53,9 @@
 // Enable hardware JPEG
 #define OMV_HARDWARE_JPEG       (1)
 
+// Enable MDMA sensor offload.
+#define OMV_ENABLE_SENSOR_MDMA  (1)
+
 // Enable sensor drivers
 #define OMV_ENABLE_OV2640       (1)
 #define OMV_ENABLE_OV5640       (1)
@@ -121,7 +124,7 @@
 
 // Clock Sources
 #define OMV_OSC_PLL_CLKSOURCE       RCC_PLLSOURCE_HSE
-#define OMV_OSC_USB_CLKSOURCE       RCC_USBCLKSOURCE_PLL
+#define OMV_OSC_USB_CLKSOURCE       RCC_USBCLKSOURCE_HSI48
 #define OMV_OSC_RNG_CLKSOURCE       RCC_RNGCLKSOURCE_HSI48
 #define OMV_OSC_ADC_CLKSOURCE       RCC_ADCCLKSOURCE_PLL3
 #define OMV_OSC_SPI123_CLKSOURCE    RCC_SPI123CLKSOURCE_PLL3
@@ -197,6 +200,10 @@
 #define OMV_DMA_MEMORY_D3_SIZE  (64*1024) // Reserved memory for DMA buffers
 #define OMV_DMA_REGION_D3_BASE  (OMV_SRAM4_ORIGIN+(0*1024))
 #define OMV_DMA_REGION_D3_SIZE  MPU_REGION_SIZE_64KB
+
+// AXI QoS - Low-High (0:15) - default 0
+#define OMV_AXI_QOS_MDMA_R_PRI  15 // Max pri to move data.
+#define OMV_AXI_QOS_MDMA_W_PRI  15 // Max pri to move data.
 
 // Image sensor I2C
 #define ISC_I2C                 (I2C1)

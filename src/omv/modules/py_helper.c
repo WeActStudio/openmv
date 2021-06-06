@@ -11,6 +11,7 @@
 #include "py/obj.h"
 #include "py/runtime.h"
 #include "framebuffer.h"
+#include "sensor.h"
 #include "py_helper.h"
 #include "py_assert.h"
 
@@ -34,6 +35,13 @@ image_t *py_helper_arg_to_image_mutable_bayer(const mp_obj_t arg)
 {
     image_t *arg_img = py_image_cobj(arg);
     PY_ASSERT_TRUE_MSG(IMAGE_IS_MUTABLE_BAYER(arg_img), "Image is not mutable!");
+    return arg_img;
+}
+
+image_t *py_helper_arg_to_image_mutable_bayer_jpeg(const mp_obj_t arg)
+{
+    image_t *arg_img = py_image_cobj(arg);
+    PY_ASSERT_TRUE_MSG(IMAGE_IS_MUTABLE_BAYER_JPEG(arg_img), "Image is not mutable!");
     return arg_img;
 }
 
@@ -415,9 +423,9 @@ const uint16_t *py_helper_keyword_color_palette(uint n_args, const mp_obj_t *arg
     mp_map_elem_t *kw_arg =
         mp_map_lookup(kw_args, MP_OBJ_NEW_QSTR(MP_QSTR_color_palette), MP_MAP_LOOKUP);
 
-    if (kw_arg && MP_OBJ_IS_TYPE(kw_arg->value, mp_const_none)) {
+    if (kw_arg && (kw_arg->value == mp_const_none)) {
         default_color_palette = NULL;
-    } else if ((n_args > arg_index) && MP_OBJ_IS_TYPE(args[arg_index], mp_const_none)) {
+    } else if ((n_args > arg_index) && (args[arg_index] == mp_const_none)) {
         default_color_palette = NULL;
     } else if (py_helper_keyword_int_maybe(n_args, args, arg_index, kw_args,
             MP_OBJ_NEW_QSTR(MP_QSTR_color_palette), &palette)) {
@@ -476,7 +484,7 @@ const uint8_t *py_helper_keyword_alpha_palette(uint n_args, const mp_obj_t *args
 
 bool py_helper_is_equal_to_framebuffer(image_t *img)
 {
-    return framebuffer_get_buffer() == img->data;
+    return framebuffer_get_buffer(framebuffer->head)->data == img->data;
 }
 
 void py_helper_update_framebuffer(image_t *img)
@@ -488,8 +496,14 @@ void py_helper_update_framebuffer(image_t *img)
 
 void py_helper_set_to_framebuffer(image_t *img)
 {
+    #if MICROPY_PY_SENSOR
+    sensor_set_framebuffers(1);
+    #else
+    framebuffer_set_buffers(1);
+    #endif
+
     PY_ASSERT_TRUE_MSG((image_size(img) <= framebuffer_get_buffer_size()),
             "The image doesn't fit in the frame buffer!");
     framebuffer_set(img->w, img->h, img->bpp);
-    img->data = framebuffer_get_buffer();
+    img->data = framebuffer_get_buffer(framebuffer->head)->data;
 }

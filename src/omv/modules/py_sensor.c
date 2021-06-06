@@ -11,7 +11,6 @@
 #include <stdarg.h>
 #include "py/mphal.h"
 #include "py/runtime.h"
-#include "pin.h"
 
 #if MICROPY_PY_SENSOR
 
@@ -30,6 +29,7 @@
 
 extern sensor_t sensor;
 static mp_obj_t vsync_callback = mp_const_none;
+static mp_obj_t frame_callback = mp_const_none;
 
 #if MICROPY_PY_IMU
 static void do_auto_rotation(int pitch_deadzone, int roll_activezone)
@@ -100,7 +100,7 @@ static mp_obj_t py_sensor_shutdown(mp_obj_t enable)
 
 static mp_obj_t py_sensor_flush()
 {
-    fb_update_jpeg_buffer();
+    framebuffer_update_jpeg_buffer();
     return mp_const_none;
 }
 
@@ -116,7 +116,7 @@ static mp_obj_t py_sensor_snapshot(uint n_args, const mp_obj_t *args, mp_map_t *
 
     mp_obj_t image = py_image(0, 0, 0, 0);
     // Note: OV2640 JPEG mode can __fatal_error().
-    int ret = sensor.snapshot(&sensor, (image_t *) py_image_cobj(image), NULL);
+    int ret = sensor.snapshot(&sensor, (image_t *) py_image_cobj(image), 0);
 
     if (ret < 0) {
         mp_raise_msg_varg(&mp_type_RuntimeError, MP_ERROR_TEXT("Capture Failed: %d"), ret);
@@ -177,6 +177,11 @@ static mp_obj_t py_sensor_get_fb()
 static mp_obj_t py_sensor_get_id()
 {
     return mp_obj_new_int(sensor_get_id());
+}
+
+static mp_obj_t py_sensor_get_frame_available()
+{
+    return mp_obj_new_bool(framebuffer->tail != framebuffer->head);
 }
 
 static mp_obj_t py_sensor_alloc_extra_fb(mp_obj_t w_obj, mp_obj_t h_obj, mp_obj_t type_obj)
@@ -277,42 +282,52 @@ static mp_obj_t py_sensor_get_framerate()
     return mp_obj_new_int(sensor.framerate);
 }
 
-static mp_obj_t py_sensor_set_windowing(mp_obj_t roi_obj)
+static mp_obj_t py_sensor_set_windowing(uint n_args, const mp_obj_t *args)
 {
-    int x, y, w, h;
-    int res_w = resolution[sensor.framesize][0];
-    int res_h = resolution[sensor.framesize][1];
+    if (sensor.framesize == FRAMESIZE_INVALID) {
+        mp_raise_msg(&mp_type_ValueError, MP_ERROR_TEXT("Frame size not set yet!"));
+    }
 
-    mp_obj_t *array;
-    mp_uint_t array_len;
-    mp_obj_get_array(roi_obj, &array_len, &array);
+    rectangle_t temp;
+    temp.x = 0;
+    temp.y = 0;
+    temp.w = resolution[sensor.framesize][0];
+    temp.h = resolution[sensor.framesize][1];
 
-    if (array_len == 4) {
-        x = mp_obj_get_int(array[0]);
-        y = mp_obj_get_int(array[1]);
-        w = mp_obj_get_int(array[2]);
-        h = mp_obj_get_int(array[3]);
-    } else if (array_len == 2) {
-        w = mp_obj_get_int(array[0]);
-        h = mp_obj_get_int(array[1]);
-        x = (res_w / 2) - (w / 2);
-        y = (res_h / 2) - (h / 2);
+    mp_obj_t *array = (mp_obj_t *) args;
+    mp_uint_t array_len = n_args;
+
+    if (n_args == 1) {
+        mp_obj_get_array(args[0], &array_len, &array);
+    }
+
+    rectangle_t r;
+
+    if (array_len == 2) {
+        r.w = mp_obj_get_int(array[0]);
+        r.h = mp_obj_get_int(array[1]);
+        r.x = (temp.w / 2) - (r.w / 2);
+        r.y = (temp.h / 2) - (r.h / 2);
+    } else if (array_len == 4) {
+        r.x = mp_obj_get_int(array[0]);
+        r.y = mp_obj_get_int(array[1]);
+        r.w = mp_obj_get_int(array[2]);
+        r.h = mp_obj_get_int(array[3]);
     } else {
-        mp_raise_msg(&mp_type_ValueError,
-            MP_ERROR_TEXT("The tuple/list must either be (x, y, w, h) or (w, h)"));
+        mp_raise_msg(&mp_type_ValueError, MP_ERROR_TEXT("The tuple/list must either be (x, y, w, h) or (w, h)"));
     }
 
-    if (w < 8 || h < 8) {
-        mp_raise_msg(&mp_type_ValueError,
-            MP_ERROR_TEXT("The selected window is too small"));
+    if ((r.w < 1) || (r.h < 1)) {
+        mp_raise_msg(&mp_type_ValueError, MP_ERROR_TEXT("Invalid ROI dimensions!"));
     }
 
-    if (x < 0 || (x + w) > res_w || y < 0 || (y + h) > res_h) {
-        mp_raise_msg(&mp_type_ValueError,
-            MP_ERROR_TEXT("The selected window is outside the bounds of the frame"));
+    if (!rectangle_overlap(&r, &temp)) {
+        mp_raise_msg(&mp_type_ValueError, MP_ERROR_TEXT("ROI does not overlap on the image!"));
     }
 
-    if (sensor_set_windowing(x, y, w, h) != 0) {
+    rectangle_intersected(&r, &temp);
+
+    if (sensor_set_windowing(r.x, r.y, r.w, r.h) != 0) {
         mp_raise_msg(&mp_type_ValueError, MP_ERROR_TEXT("Failed to set windowing!"));
     }
 
@@ -518,6 +533,26 @@ static mp_obj_t py_sensor_get_auto_rotation()
     return mp_obj_new_bool(sensor_get_auto_rotation());
 }
 
+static mp_obj_t py_sensor_set_framebuffers(mp_obj_t count)
+{
+    mp_int_t c = mp_obj_get_int(count);
+
+    if (framebuffer->n_buffers == c) {
+        return mp_const_none;
+    }
+
+    if ((c < 1) || (sensor_set_framebuffers(c) != 0)) {
+        mp_raise_msg(&mp_type_ValueError, MP_ERROR_TEXT("Invalid framebuffer count!"));
+    }
+
+    return mp_const_none;
+}
+
+static mp_obj_t py_sensor_get_framebuffers()
+{
+    return mp_obj_new_int(framebuffer->n_buffers);
+}
+
 static mp_obj_t py_sensor_set_special_effect(mp_obj_t sde)
 {
     if (sensor_set_special_effect(mp_obj_get_int(sde)) != 0) {
@@ -551,6 +586,27 @@ static mp_obj_t py_sensor_set_vsync_callback(mp_obj_t vsync_callback_obj)
         vsync_callback = vsync_callback_obj;
         sensor_set_vsync_callback(sensor_vsync_callback);
     }
+
+    return mp_const_none;
+}
+
+static void sensor_frame_callback()
+{
+    if (mp_obj_is_callable(frame_callback)) {
+        mp_call_function_0(frame_callback);
+    }
+}
+
+static mp_obj_t py_sensor_set_frame_callback(mp_obj_t frame_callback_obj)
+{
+    if (!mp_obj_is_callable(frame_callback_obj)) {
+        frame_callback = mp_const_none;
+        sensor_set_frame_callback(NULL);
+    } else {
+        frame_callback = frame_callback_obj;
+        sensor_set_frame_callback(sensor_frame_callback);
+    }
+
     return mp_const_none;
 }
 
@@ -881,6 +937,7 @@ STATIC MP_DEFINE_CONST_FUN_OBJ_0(py_sensor_width_obj,               py_sensor_wi
 STATIC MP_DEFINE_CONST_FUN_OBJ_0(py_sensor_height_obj,              py_sensor_height);
 STATIC MP_DEFINE_CONST_FUN_OBJ_0(py_sensor_get_fb_obj,              py_sensor_get_fb);
 STATIC MP_DEFINE_CONST_FUN_OBJ_0(py_sensor_get_id_obj,              py_sensor_get_id);
+STATIC MP_DEFINE_CONST_FUN_OBJ_0(py_sensor_get_frame_available_obj, py_sensor_get_frame_available);
 STATIC MP_DEFINE_CONST_FUN_OBJ_3(py_sensor_alloc_extra_fb_obj,      py_sensor_alloc_extra_fb);
 STATIC MP_DEFINE_CONST_FUN_OBJ_0(py_sensor_dealloc_extra_fb_obj,    py_sensor_dealloc_extra_fb);
 STATIC MP_DEFINE_CONST_FUN_OBJ_1(py_sensor_set_pixformat_obj,       py_sensor_set_pixformat);
@@ -889,8 +946,8 @@ STATIC MP_DEFINE_CONST_FUN_OBJ_1(py_sensor_set_framesize_obj,       py_sensor_se
 STATIC MP_DEFINE_CONST_FUN_OBJ_0(py_sensor_get_framesize_obj,       py_sensor_get_framesize);
 STATIC MP_DEFINE_CONST_FUN_OBJ_1(py_sensor_set_framerate_obj,       py_sensor_set_framerate);
 STATIC MP_DEFINE_CONST_FUN_OBJ_0(py_sensor_get_framerate_obj,       py_sensor_get_framerate);
-STATIC MP_DEFINE_CONST_FUN_OBJ_1(py_sensor_set_windowing_obj,       py_sensor_set_windowing);
-STATIC MP_DEFINE_CONST_FUN_OBJ_0(py_sensor_get_windowing_obj,       py_sensor_get_windowing);
+STATIC MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(py_sensor_set_windowing_obj, 1, 4, py_sensor_set_windowing);
+STATIC MP_DEFINE_CONST_FUN_OBJ_0(py_sensor_get_windowing_obj, py_sensor_get_windowing);
 STATIC MP_DEFINE_CONST_FUN_OBJ_1(py_sensor_set_gainceiling_obj,     py_sensor_set_gainceiling);
 STATIC MP_DEFINE_CONST_FUN_OBJ_1(py_sensor_set_contrast_obj,        py_sensor_set_contrast);
 STATIC MP_DEFINE_CONST_FUN_OBJ_1(py_sensor_set_brightness_obj,      py_sensor_set_brightness);
@@ -911,9 +968,12 @@ STATIC MP_DEFINE_CONST_FUN_OBJ_1(py_sensor_set_transpose_obj,       py_sensor_se
 STATIC MP_DEFINE_CONST_FUN_OBJ_0(py_sensor_get_transpose_obj,       py_sensor_get_transpose);
 STATIC MP_DEFINE_CONST_FUN_OBJ_1(py_sensor_set_auto_rotation_obj,   py_sensor_set_auto_rotation);
 STATIC MP_DEFINE_CONST_FUN_OBJ_0(py_sensor_get_auto_rotation_obj,   py_sensor_get_auto_rotation);
+STATIC MP_DEFINE_CONST_FUN_OBJ_1(py_sensor_set_framebuffers_obj,    py_sensor_set_framebuffers);
+STATIC MP_DEFINE_CONST_FUN_OBJ_0(py_sensor_get_framebuffers_obj,    py_sensor_get_framebuffers);
 STATIC MP_DEFINE_CONST_FUN_OBJ_1(py_sensor_set_special_effect_obj,  py_sensor_set_special_effect);
 STATIC MP_DEFINE_CONST_FUN_OBJ_3(py_sensor_set_lens_correction_obj, py_sensor_set_lens_correction);
 STATIC MP_DEFINE_CONST_FUN_OBJ_1(py_sensor_set_vsync_callback_obj,  py_sensor_set_vsync_callback);
+STATIC MP_DEFINE_CONST_FUN_OBJ_1(py_sensor_set_frame_callback_obj,  py_sensor_set_frame_callback);
 STATIC MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(py_sensor_ioctl_obj, 1, 5, py_sensor_ioctl);
 STATIC MP_DEFINE_CONST_FUN_OBJ_1(py_sensor_set_color_palette_obj,   py_sensor_set_color_palette);
 STATIC MP_DEFINE_CONST_FUN_OBJ_0(py_sensor_get_color_palette_obj,   py_sensor_get_color_palette);
@@ -1017,6 +1077,13 @@ STATIC const mp_map_elem_t globals_dict_table[] = {
     { MP_OBJ_NEW_QSTR(MP_QSTR_IOCTL_HIMAX_MD_CLEAR),                MP_OBJ_NEW_SMALL_INT(IOCTL_HIMAX_MD_CLEAR)},
     { MP_OBJ_NEW_QSTR(MP_QSTR_IOCTL_HIMAX_OSC_ENABLE),              MP_OBJ_NEW_SMALL_INT(IOCTL_HIMAX_OSC_ENABLE)},
     #endif
+
+    // Framebuffer Sizes
+    { MP_OBJ_NEW_QSTR(MP_QSTR_SINGLE_BUFFER),                       MP_OBJ_NEW_SMALL_INT(1)},
+    { MP_OBJ_NEW_QSTR(MP_QSTR_DOUBLE_BUFFER),                       MP_OBJ_NEW_SMALL_INT(2)},
+    { MP_OBJ_NEW_QSTR(MP_QSTR_TRIPLE_BUFFER),                       MP_OBJ_NEW_SMALL_INT(3)},
+    { MP_OBJ_NEW_QSTR(MP_QSTR_VIDEO_FIFO),                          MP_OBJ_NEW_SMALL_INT(4)},
+
     // Sensor functions
     { MP_OBJ_NEW_QSTR(MP_QSTR___init__),            (mp_obj_t)&py_sensor__init__obj },
     { MP_OBJ_NEW_QSTR(MP_QSTR_reset),               (mp_obj_t)&py_sensor_reset_obj },
@@ -1029,6 +1096,7 @@ STATIC const mp_map_elem_t globals_dict_table[] = {
     { MP_OBJ_NEW_QSTR(MP_QSTR_height),              (mp_obj_t)&py_sensor_height_obj },
     { MP_OBJ_NEW_QSTR(MP_QSTR_get_fb),              (mp_obj_t)&py_sensor_get_fb_obj },
     { MP_OBJ_NEW_QSTR(MP_QSTR_get_id),              (mp_obj_t)&py_sensor_get_id_obj },
+    { MP_OBJ_NEW_QSTR(MP_QSTR_get_frame_available), (mp_obj_t)&py_sensor_get_frame_available_obj },
     { MP_OBJ_NEW_QSTR(MP_QSTR_alloc_extra_fb),      (mp_obj_t)&py_sensor_alloc_extra_fb_obj },
     { MP_OBJ_NEW_QSTR(MP_QSTR_dealloc_extra_fb),    (mp_obj_t)&py_sensor_dealloc_extra_fb_obj },
     { MP_OBJ_NEW_QSTR(MP_QSTR_set_pixformat),       (mp_obj_t)&py_sensor_set_pixformat_obj },
@@ -1059,9 +1127,12 @@ STATIC const mp_map_elem_t globals_dict_table[] = {
     { MP_OBJ_NEW_QSTR(MP_QSTR_get_transpose),       (mp_obj_t)&py_sensor_get_transpose_obj },
     { MP_OBJ_NEW_QSTR(MP_QSTR_set_auto_rotation),   (mp_obj_t)&py_sensor_set_auto_rotation_obj },
     { MP_OBJ_NEW_QSTR(MP_QSTR_get_auto_rotation),   (mp_obj_t)&py_sensor_get_auto_rotation_obj },
+    { MP_OBJ_NEW_QSTR(MP_QSTR_set_framebuffers),    (mp_obj_t)&py_sensor_set_framebuffers_obj },
+    { MP_OBJ_NEW_QSTR(MP_QSTR_get_framebuffers),    (mp_obj_t)&py_sensor_get_framebuffers_obj },
     { MP_OBJ_NEW_QSTR(MP_QSTR_set_special_effect),  (mp_obj_t)&py_sensor_set_special_effect_obj },
     { MP_OBJ_NEW_QSTR(MP_QSTR_set_lens_correction), (mp_obj_t)&py_sensor_set_lens_correction_obj },
     { MP_OBJ_NEW_QSTR(MP_QSTR_set_vsync_callback),  (mp_obj_t)&py_sensor_set_vsync_callback_obj },
+    { MP_OBJ_NEW_QSTR(MP_QSTR_set_frame_callback),  (mp_obj_t)&py_sensor_set_frame_callback_obj },
     { MP_OBJ_NEW_QSTR(MP_QSTR_ioctl),               (mp_obj_t)&py_sensor_ioctl_obj },
     { MP_OBJ_NEW_QSTR(MP_QSTR_set_color_palette),   (mp_obj_t)&py_sensor_set_color_palette_obj },
     { MP_OBJ_NEW_QSTR(MP_QSTR_get_color_palette),   (mp_obj_t)&py_sensor_get_color_palette_obj },
@@ -1075,4 +1146,5 @@ const mp_obj_module_t sensor_module = {
     .base = { &mp_type_module },
     .globals = (mp_obj_t)&globals_dict,
 };
-#endif  //MICROPY_PY_SENSOR
+
+#endif // MICROPY_PY_SENSOR

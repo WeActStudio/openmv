@@ -107,7 +107,7 @@ static uint8_t uvc_header[2] = { 2, 0 };
 static uint8_t packet[VIDEO_PACKET_SIZE];
 uint32_t packet_size = VIDEO_PACKET_SIZE-2;
 
-bool streaming_cb(image_t *image)
+bool process_frame(image_t *image)
 {
     uint32_t xfer_size = 0;
     uint32_t xfer_bytes = 0;
@@ -179,15 +179,15 @@ int main()
     }
     #endif
 
-    sensor_init0();
-    framebuffer_init0();
     fb_alloc_init0();
+    framebuffer_init0();
+    sensor_init0();
 
     // Initialize the sensor
     if (sensor_init() != 0) {
         __fatal_error();
     }
-    
+
     sensor_reset();
 
     /* Init Device Library */
@@ -240,9 +240,10 @@ int main()
                 format_index = videoCommitControl.bFormatIndex;
             }
 
-            image_t image;
-            image.pixels = NULL;
-            sensor.snapshot(&sensor, &image, streaming_cb);
+            image_t image = {0};
+            do {
+                sensor.snapshot(&sensor, &image, 0);
+            } while (process_frame(&image));
         }
     }
 }

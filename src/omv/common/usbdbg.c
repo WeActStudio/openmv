@@ -14,9 +14,6 @@
 #include "py/gc.h"
 #include "py/mphal.h"
 #include "py/obj.h"
-#include "py/lexer.h"
-#include "py/parse.h"
-#include "py/compile.h"
 #include "py/runtime.h"
 #include "pendsv.h"
 
@@ -37,6 +34,7 @@ static enum usbdbg_cmd cmd;
 
 static volatile bool script_ready;
 static volatile bool script_running;
+static volatile bool irq_enabled;
 static vstr_t script_buf;
 static mp_obj_t mp_const_ide_interrupt = MP_OBJ_NULL;
 
@@ -49,8 +47,14 @@ void usbdbg_init()
     cmd = USBDBG_NONE;
     script_ready=false;
     script_running=false;
+    irq_enabled = false;
     vstr_init(&script_buf, 32);
     mp_const_ide_interrupt = mp_obj_new_exception_msg(&mp_type_Exception, "IDE interrupt");
+}
+
+void usbdbg_wait_for_command(uint32_t timeout)
+{
+    for (mp_uint_t ticks = mp_hal_ticks_ms(); ((mp_hal_ticks_ms() - ticks) < timeout) && (cmd != USBDBG_NONE); );
 }
 
 bool usbdbg_script_ready()
@@ -76,6 +80,12 @@ inline void usbdbg_set_irq_enabled(bool enabled)
         NVIC_DisableIRQ(OMV_USB_IRQN);
     }
     __DSB(); __ISB();
+    irq_enabled = enabled;
+}
+
+bool usbdbg_get_irq_enabled()
+{
+    return irq_enabled;
 }
 
 void usbdbg_data_in(void *buffer, int length)
@@ -121,7 +131,7 @@ void usbdbg_data_in(void *buffer, int length)
             // Return 0 if FB is locked or not ready.
             ((uint32_t*)buffer)[0] = 0;
             // Try to lock FB. If header size == 0 frame is not ready
-            if (mutex_try_lock(&JPEG_FB()->lock, MUTEX_TID_IDE)) {
+            if (mutex_try_lock_alternate(&JPEG_FB()->lock, MUTEX_TID_IDE)) {
                 // If header size == 0 frame is not ready
                 if (JPEG_FB()->size == 0) {
                     // unlock FB
@@ -367,15 +377,14 @@ void usbdbg_control(void *buffer, uint8_t request, uint32_t length)
             break;
 
         case USBDBG_SYS_RESET_TO_BL:{
-            #if defined(RTC_BASE)
-            RTC_HandleTypeDef RTCHandle;
-            RTCHandle.Instance = RTC;
-            HAL_RTCEx_BKUPWrite(&RTCHandle, RTC_BKP_DR0, 0xDF59);
-            #endif
+            #if defined(MICROPY_RESET_TO_BOOTLOADER)
+            MICROPY_RESET_TO_BOOTLOADER();
+            #else
             NVIC_SystemReset();
+            #endif
             break;
         }
-        
+
         case USBDBG_FB_ENABLE: {
             xfer_bytes = 0;
             xfer_length = length;

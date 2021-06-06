@@ -20,6 +20,8 @@
 // Needed by the SWD JTAG testrig - located at the bottom of the frame buffer stack.
 #define OMV_SELF_TEST_SWD_ADDR  MAIN_FB()->bpp
 
+#define WeACtStudio
+
 // OpenMV Run in QSPI Flash
 // if not define this run in Internal Flash
 #define OMV_RUN_QSPI
@@ -58,6 +60,9 @@
 
 // Enable hardware JPEG
 #define OMV_HARDWARE_JPEG       (1)
+
+// Enable MDMA sensor offload.
+#define OMV_ENABLE_SENSOR_MDMA  (1)
 
 // Enable sensor drivers
 #define OMV_ENABLE_OV2640       (1)
@@ -206,6 +211,10 @@
 //#define OMV_DMA_MEMORY_D3       SRAM4
 //#define OMV_DMA_REGION_D3_BASE  (OMV_SRAM4_ORIGIN+(0*1024))
 //#define OMV_DMA_REGION_D3_SIZE  MPU_REGION_SIZE_64KB
+
+// AXI QoS - Low-High (0:15) - default 0
+#define OMV_AXI_QOS_MDMA_R_PRI  15 // Max pri to move data.
+#define OMV_AXI_QOS_MDMA_W_PRI  15 // Max pri to move data.
 
 // Image sensor I2C
 #define ISC_I2C                 (I2C1)

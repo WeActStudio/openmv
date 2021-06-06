@@ -41,6 +41,9 @@
 // Enable hardware JPEG
 #define OMV_HARDWARE_JPEG       (1)
 
+// Enable MDMA sensor offload.
+#define OMV_ENABLE_SENSOR_MDMA  (1)
+
 // Enable sensor drivers
 #define OMV_ENABLE_OV2640       (0)
 #define OMV_ENABLE_OV5640       (0)
@@ -48,8 +51,10 @@
 #define OMV_ENABLE_OV7725       (0)
 #define OMV_ENABLE_OV9650       (0)
 #define OMV_ENABLE_MT9V034      (0)
+#define OMV_ENABLE_MT9M114      (1)
 #define OMV_ENABLE_LEPTON       (0)
 #define OMV_ENABLE_HM01B0       (0)
+#define OMV_ENABLE_GC2145       (1)
 
 // Enable sensor features
 #define OMV_ENABLE_OV5640_AF    (0)
@@ -176,7 +181,7 @@
 
 // Domain 2 DMA buffers region.
 #define OMV_DMA_MEMORY_D2       SRAM2
-#define OMV_DMA_MEMORY_D2_SIZE  (2*1024) // Reserved memory for DMA buffers
+#define OMV_DMA_MEMORY_D2_SIZE  (1*1024) // Reserved memory for DMA buffers
 #define OMV_DMA_REGION_D2_BASE  (OMV_SRAM2_ORIGIN+(0*1024))
 #define OMV_DMA_REGION_D2_SIZE  MPU_REGION_SIZE_8KB
 
@@ -184,6 +189,10 @@
 //#define OMV_DMA_MEMORY_D3       SRAM4
 //#define OMV_DMA_REGION_D3_BASE  (OMV_SRAM4_ORIGIN+(0*1024))
 //#define OMV_DMA_REGION_D3_SIZE  MPU_REGION_SIZE_64KB
+
+// AXI QoS - Low-High (0:15) - default 0
+#define OMV_AXI_QOS_MDMA_R_PRI  15 // Max pri to move data.
+#define OMV_AXI_QOS_MDMA_W_PRI  15 // Max pri to move data.
 
 // Image sensor I2C
 #define ISC_I2C                 (I2C3)

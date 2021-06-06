@@ -47,6 +47,9 @@
 // Enable hardware JPEG
 #define OMV_HARDWARE_JPEG       (1)
 
+// Enable MDMA sensor offload.
+#define OMV_ENABLE_SENSOR_MDMA  (1)
+
 // Enable sensor drivers
 #define OMV_ENABLE_OV2640       (0)
 #define OMV_ENABLE_OV5640       (0)
@@ -56,6 +59,7 @@
 #define OMV_ENABLE_MT9V034      (0)
 #define OMV_ENABLE_LEPTON       (0)
 #define OMV_ENABLE_HM01B0       (1)
+#define OMV_ENABLE_GC2145       (1)
 
 // Enable sensor features
 #define OMV_ENABLE_OV5640_AF    (0)
@@ -152,7 +156,7 @@
 #define OMV_FB_SIZE             (4M)       // FB memory: header + VGA/GS image
 #define OMV_FB_ALLOC_SIZE       (3M)       // minimum fb alloc size
 #define OMV_STACK_SIZE          (64K)
-#define OMV_HEAP_SIZE           (180K)
+#define OMV_HEAP_SIZE           (160K)
 #define OMV_SDRAM_SIZE          (8 * 1024 * 1024) // This needs to be here for UVC firmware.
 
 #define OMV_LINE_BUF_SIZE       (11 * 1024) // Image line buffer round(2592 * 2BPP * 2 buffers).
@@ -203,6 +207,8 @@
 #define OMV_DMA_REGION_D3_SIZE  MPU_REGION_SIZE_64KB
 
 // AXI QoS - Low-High (0:15) - default 0
+#define OMV_AXI_QOS_MDMA_R_PRI  14 // Max pri to move data.
+#define OMV_AXI_QOS_MDMA_W_PRI  15 // Max pri to move data.
 #define OMV_AXI_QOS_LTDC_R_PRI  15 // Max pri to read out the frame buffer.
 
 // Image sensor I2C
