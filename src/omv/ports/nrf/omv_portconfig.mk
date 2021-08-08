@@ -106,6 +106,7 @@ FIRM_OBJ += $(addprefix $(BUILD)/$(OMV_DIR)/common/, \
 	trace.o                     \
 	mutex.o                     \
 	usbdbg.o                    \
+	sensor_utils.o              \
    )
 
 FIRM_OBJ += $(addprefix $(BUILD)/$(OMV_DIR)/sensors/,   \
@@ -161,6 +162,7 @@ FIRM_OBJ += $(addprefix $(BUILD)/$(OMV_DIR)/imlib/, \
 	imlib.o                     \
 	integral.o                  \
 	integral_mw.o               \
+	jpegd.o                     \
 	jpeg.o                      \
 	kmeans.o                    \
 	lab_tab.o                   \
@@ -366,7 +368,8 @@ FIRMWARE_OBJS: | $(BUILD) $(FW_DIR)
 $(FIRMWARE): FIRMWARE_OBJS
 	$(CPP) -P -E -I$(OMV_BOARD_CONFIG_DIR) $(OMV_DIR)/ports/$(PORT)/$(LDSCRIPT).ld.S > $(BUILD)/$(LDSCRIPT).lds
 	$(CC) $(LDFLAGS) $(FIRM_OBJ) -o $(FW_DIR)/$(FIRMWARE).elf $(LIBS) -lgcc
-	$(OBJCOPY) -Oihex   -R .big_const* $(FW_DIR)/$(FIRMWARE).elf $(FW_DIR)/$(FIRMWARE).hex
+	$(OBJCOPY) -Oihex   $(FW_DIR)/$(FIRMWARE).elf $(FW_DIR)/$(FIRMWARE).hex
+	$(OBJCOPY) -Obinary $(FW_DIR)/$(FIRMWARE).elf $(FW_DIR)/$(FIRMWARE).bin
 
 # This target generates the firmware image.
 $(OPENMV): $(FIRMWARE)

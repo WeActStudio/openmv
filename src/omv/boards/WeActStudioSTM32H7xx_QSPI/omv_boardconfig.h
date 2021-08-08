@@ -67,12 +67,20 @@
 // Enable sensor drivers
 #define OMV_ENABLE_OV2640       (1)
 #define OMV_ENABLE_OV5640       (1)
-#define OMV_ENABLE_OV7690       (1)
+#define OMV_ENABLE_OV7670       (1)
+#define OMV_ENABLE_OV7690       (0)
 #define OMV_ENABLE_OV7725       (1)
 #define OMV_ENABLE_OV9650       (0)
+#define OMV_ENABLE_MT9M114      (0)
 #define OMV_ENABLE_MT9V034      (0)
 #define OMV_ENABLE_LEPTON       (0)
 #define OMV_ENABLE_HM01B0       (0)
+
+// Set which OV767x sensor is used
+#define OMV_OV7670_VERSION      (70)
+
+// OV7670 clock divider
+#define OMV_OV7670_CLKRC        (0)
 
 // Enable sensor features
 #define OMV_ENABLE_OV5640_AF    (1)
@@ -443,9 +451,9 @@
 
 // FIR Module
 #define OMV_ENABLE_FIR_MLX90621             (1)
-#define OMV_ENABLE_FIR_MLX90640             (1)
+#define OMV_ENABLE_FIR_MLX90640             (0)
 #define OMV_ENABLE_FIR_MLX90641             (0)
-#define OMV_ENABLE_FIR_AMG8833              (1)
+#define OMV_ENABLE_FIR_AMG8833              (0)
 #define OMV_ENABLE_FIR_LEPTON               (1)
 
 // FIR Lepton

@@ -54,9 +54,10 @@
 #define OMV_ENABLE_OV2640       (0)
 #define OMV_ENABLE_OV5640       (0)
 #define OMV_ENABLE_OV7690       (0)
-#define OMV_ENABLE_OV7725       (0)
+#define OMV_ENABLE_OV7725       (1)
 #define OMV_ENABLE_OV9650       (0)
-#define OMV_ENABLE_MT9V034      (0)
+#define OMV_ENABLE_MT9M114      (0)
+#define OMV_ENABLE_MT9V034      (1)
 #define OMV_ENABLE_LEPTON       (0)
 #define OMV_ENABLE_HM01B0       (1)
 #define OMV_ENABLE_GC2145       (1)
@@ -224,6 +225,19 @@
 #define ISC_I2C_FORCE_RESET()   __HAL_RCC_I2C3_FORCE_RESET()
 #define ISC_I2C_RELEASE_RESET() __HAL_RCC_I2C3_RELEASE_RESET()
 
+// Alternate I2C bus for the Portenta breakout
+#define ISC_I2C_ALT                 (I2C4)
+#define ISC_I2C_ALT_ID              (4)
+#define ISC_I2C_ALT_AF              (GPIO_AF4_I2C4)
+#define ISC_I2C_ALT_CLK_ENABLE()    __HAL_RCC_I2C4_CLK_ENABLE()
+#define ISC_I2C_ALT_CLK_DISABLE()   __HAL_RCC_I2C4_CLK_DISABLE()
+#define ISC_I2C_ALT_PORT            (GPIOH)
+#define ISC_I2C_ALT_SCL_PIN         (GPIO_PIN_11)
+#define ISC_I2C_ALT_SDA_PIN         (GPIO_PIN_12)
+#define ISC_I2C_ALT_SPEED           (CAMBUS_SPEED_STANDARD)
+#define ISC_I2C_ALT_FORCE_RESET()   __HAL_RCC_I2C4_FORCE_RESET()
+#define ISC_I2C_ALT_RELEASE_RESET() __HAL_RCC_I2C4_RELEASE_RESET()
+
 // FIR I2C
 #define FIR_I2C                 (I2C3)
 #define FIR_I2C_ID              (3)
@@ -237,13 +251,32 @@
 #define FIR_I2C_FORCE_RESET()   __HAL_RCC_I2C3_FORCE_RESET()
 #define FIR_I2C_RELEASE_RESET() __HAL_RCC_I2C3_RELEASE_RESET()
 
-#define DCMI_PWDN_PIN           (GPIO_PIN_13)
-#define DCMI_PWDN_PORT          (GPIOC)
+// GPIO.0 is connected to the sensor module reset pin on the Portenta
+// breakout board and to the LDO's LDO_ENABLE pin on the Himax shield.
+// The sensor probing process will detect the right reset or powerdown
+// polarity, so it should be fine to enable it for both boards.
+#define DCMI_RESET_PIN          (GPIO_PIN_13)
+#define DCMI_RESET_PORT         (GPIOC)
+
+// GPIO.1 is connected to the sensor module frame sync pin (OUTPUT) on
+// the Portenta breakout board and to the INT pin (OUTPUT) on the Himax
+// shield, so it can't be enabled for the two boards at the same time.
+//#define DCMI_FSYNC_PIN          (GPIO_PIN_15)
+//#define DCMI_FSYNC_PORT         (GPIOC)
+
+// GPIO.3 is connected to the powerdown pin on the Portenta breakout board,
+// and to the STROBE pin on the Himax shield, however it's not actually
+// used on the Himax shield and can be safely enable for the two boards.
+#define DCMI_PWDN_PIN           (GPIO_PIN_5)
+#define DCMI_PWDN_PORT          (GPIOD)
 
 /* DCMI */
 #define DCMI_TIM                (TIM1)
 #define DCMI_TIM_PIN            (GPIO_PIN_1)
 #define DCMI_TIM_PORT           (GPIOK)
+// Enable TIM1-CH1 on PA8 too for Portenta breakout.
+#define DCMI_TIM_EXT_PIN        (GPIO_PIN_8)
+#define DCMI_TIM_EXT_PORT       (GPIOA)
 #define DCMI_TIM_AF             (GPIO_AF1_TIM1)
 #define DCMI_TIM_CHANNEL        (TIM_CHANNEL_1)
 #define DCMI_TIM_CLK_ENABLE()   __TIM1_CLK_ENABLE()
@@ -285,11 +318,19 @@
 #endif
 
 #if defined(DCMI_PWDN_PIN)
-#define DCMI_PWDN_LOW()         HAL_GPIO_WritePin(DCMI_PWDN_PORT, DCMI_PWDN_PIN, GPIO_PIN_SET)
-#define DCMI_PWDN_HIGH()        HAL_GPIO_WritePin(DCMI_PWDN_PORT, DCMI_PWDN_PIN, GPIO_PIN_RESET)
+#define DCMI_PWDN_LOW()         HAL_GPIO_WritePin(DCMI_PWDN_PORT, DCMI_PWDN_PIN, GPIO_PIN_RESET)
+#define DCMI_PWDN_HIGH()        HAL_GPIO_WritePin(DCMI_PWDN_PORT, DCMI_PWDN_PIN, GPIO_PIN_SET)
 #else
 #define DCMI_PWDN_LOW()
 #define DCMI_PWDN_HIGH()
+#endif
+
+#if defined(DCMI_FSYNC_PIN)
+#define DCMI_FSYNC_LOW()        HAL_GPIO_WritePin(DCMI_FSYNC_PORT, DCMI_FSYNC_PIN, GPIO_PIN_RESET)
+#define DCMI_FSYNC_HIGH()       HAL_GPIO_WritePin(DCMI_FSYNC_PORT, DCMI_FSYNC_PIN, GPIO_PIN_SET)
+#else
+#define DCMI_FSYNC_LOW()
+#define DCMI_FSYNC_HIGH()
 #endif
 
 #define DCMI_VSYNC_IRQN         EXTI9_5_IRQn
@@ -398,7 +439,7 @@
 #define OMV_SPI_LCD_RS_OFF()                HAL_GPIO_WritePin(OMV_SPI_LCD_RS_PORT, OMV_SPI_LCD_RS_PIN, GPIO_PIN_SET)
 #define OMV_SPI_LCD_RS_ON()                 HAL_GPIO_WritePin(OMV_SPI_LCD_RS_PORT, OMV_SPI_LCD_RS_PIN, GPIO_PIN_RESET)
 
-#define OMV_SPI_LCD_CS_PIN                  (GPIO_PIN_8)
+#define OMV_SPI_LCD_CS_PIN                  (GPIO_PIN_0)
 #define OMV_SPI_LCD_CS_PORT                 (GPIOI)
 #define OMV_SPI_LCD_CS_HIGH()               HAL_GPIO_WritePin(OMV_SPI_LCD_CS_PORT, OMV_SPI_LCD_CS_PIN, GPIO_PIN_SET)
 #define OMV_SPI_LCD_CS_LOW()                HAL_GPIO_WritePin(OMV_SPI_LCD_CS_PORT, OMV_SPI_LCD_CS_PIN, GPIO_PIN_RESET)
@@ -440,7 +481,7 @@
 #define OMV_FIR_LEPTON_SCLK_PORT            (GPIOI)
 #define OMV_FIR_LEPTON_SCLK_ALT             (GPIO_AF5_SPI2)
 
-#define OMV_FIR_LEPTON_CS_PIN               (GPIO_PIN_8)
+#define OMV_FIR_LEPTON_CS_PIN               (GPIO_PIN_0)
 #define OMV_FIR_LEPTON_CS_PORT              (GPIOI)
 #define OMV_FIR_LEPTON_CS_HIGH()            HAL_GPIO_WritePin(OMV_FIR_LEPTON_CS_PORT, OMV_FIR_LEPTON_CS_PIN, GPIO_PIN_SET)
 #define OMV_FIR_LEPTON_CS_LOW()             HAL_GPIO_WritePin(OMV_FIR_LEPTON_CS_PORT, OMV_FIR_LEPTON_CS_PIN, GPIO_PIN_RESET)
