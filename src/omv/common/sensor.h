@@ -38,10 +38,12 @@
 #define OV7725_ID           (0x77)
 #define OV9650_ID           (0x96)
 #define MT9V034_ID          (0x13)
-#define MT9M114_ID          (0x81)
+#define MT9M114_ID          (0x2481)
 #define LEPTON_ID           (0x54)
 #define HM01B0_ID           (0xB0)
 #define GC2145_ID           (0x21)
+// Wide ID
+#define PAJ6100_ID          (0x6100)
 
 typedef enum {
     FRAMESIZE_INVALID = 0,
@@ -58,14 +60,18 @@ typedef enum {
     FRAMESIZE_QQVGA,    // 160x120
     FRAMESIZE_QVGA,     // 320x240
     FRAMESIZE_VGA,      // 640x480
+    FRAMESIZE_HQQQQVGA, // 30x20
     FRAMESIZE_HQQQVGA,  // 60x40
     FRAMESIZE_HQQVGA,   // 120x80
     FRAMESIZE_HQVGA,    // 240x160
+    FRAMESIZE_HVGA,     // 480x320
     // FFT Resolutions
     FRAMESIZE_64X32,    // 64x32
     FRAMESIZE_64X64,    // 64x64
     FRAMESIZE_128X64,   // 128x64
     FRAMESIZE_128X128,  // 128x128
+    // Himax Resolutions
+    FRAMESIZE_160X160,  // 160x160
     FRAMESIZE_320X320,  // 320x320
     // Other
     FRAMESIZE_LCD,      // 128x160
@@ -74,7 +80,9 @@ typedef enum {
     FRAMESIZE_WVGA2,    // 752x480
     FRAMESIZE_SVGA,     // 800x600
     FRAMESIZE_XGA,      // 1024x768
+    FRAMESIZE_WXGA,     // 1280x768
     FRAMESIZE_SXGA,     // 1280x1024
+    FRAMESIZE_SXGAM,    // 1280x960
     FRAMESIZE_UXGA,     // 1600x1200
     FRAMESIZE_HD,       // 1280x720
     FRAMESIZE_FHD,      // 1920x1080
@@ -141,15 +149,39 @@ typedef enum {
     IOCTL_HIMAX_OSC_ENABLE,
 } ioctl_t;
 
-#define SENSOR_HW_FLAGS_VSYNC        (0) // vertical sync polarity.
-#define SENSOR_HW_FLAGS_HSYNC        (1) // horizontal sync polarity.
-#define SENSOR_HW_FLAGS_PIXCK        (2) // pixel clock edge.
-#define SENSOR_HW_FLAGS_FSYNC        (3) // hardware frame sync.
-#define SENSOR_HW_FLAGS_JPEGE        (4) // hardware JPEG encoder.
-#define SWNSOR_HW_FLAGS_RGB565_REV   (5) // byte reverse rgb565.
-#define SENSOR_HW_FLAGS_GET(s, x)    ((s)->hw_flags &  (1<<x))
-#define SENSOR_HW_FLAGS_SET(s, x, v) ((s)->hw_flags |= (v<<x))
-#define SENSOR_HW_FLAGS_CLR(s, x)    ((s)->hw_flags &= ~(1<<x))
+typedef enum {
+    SENSOR_ERROR_NO_ERROR               =  0,
+    SENSOR_ERROR_CTL_FAILED             = -1,
+    SENSOR_ERROR_CTL_UNSUPPORTED        = -2,
+    SENSOR_ERROR_ISC_UNDETECTED         = -3,
+    SENSOR_ERROR_ISC_UNSUPPORTED        = -4,
+    SENSOR_ERROR_ISC_INIT_FAILED        = -5,
+    SENSOR_ERROR_TIM_INIT_FAILED        = -6,
+    SENSOR_ERROR_DMA_INIT_FAILED        = -7,
+    SENSOR_ERROR_DCMI_INIT_FAILED       = -8,
+    SENSOR_ERROR_IO_ERROR               = -9,
+    SENSOR_ERROR_CAPTURE_FAILED         = -10,
+    SENSOR_ERROR_CAPTURE_TIMEOUT        = -11,
+    SENSOR_ERROR_INVALID_FRAMESIZE      = -12,
+    SENSOR_ERROR_INVALID_PIXFORMAT      = -13,
+    SENSOR_ERROR_INVALID_WINDOW         = -14,
+    SENSOR_ERROR_INVALID_FRAMERATE      = -15,
+    SENSOR_ERROR_INVALID_ARGUMENT       = -16,
+    SENSOR_ERROR_PIXFORMAT_UNSUPPORTED  = -17,
+    SENSOR_ERROR_FRAMEBUFFER_ERROR      = -18,
+    SENSOR_ERROR_FRAMEBUFFER_OVERFLOW   = -19,
+    SENSOR_ERROR_JPEG_OVERFLOW          = -20,
+} sensor_error_t;
+
+#define SENSOR_HW_FLAGS_VSYNC           (0) // vertical sync polarity.
+#define SENSOR_HW_FLAGS_HSYNC           (1) // horizontal sync polarity.
+#define SENSOR_HW_FLAGS_PIXCK           (2) // pixel clock edge.
+#define SENSOR_HW_FLAGS_FSYNC           (3) // hardware frame sync.
+#define SENSOR_HW_FLAGS_JPEGE           (4) // hardware JPEG encoder.
+#define SENSOR_HW_FLAGS_RGB565_REV      (5) // byte reverse rgb565.
+#define SENSOR_HW_FLAGS_GET(s, x)       ((s)->hw_flags &  (1<<x))
+#define SENSOR_HW_FLAGS_SET(s, x, v)    ((s)->hw_flags |= (v<<x))
+#define SENSOR_HW_FLAGS_CLR(s, x)       ((s)->hw_flags &= ~(1<<x))
 
 typedef void (*vsync_cb_t)(uint32_t vsync);
 typedef void (*frame_cb_t)();
@@ -164,6 +196,7 @@ typedef struct _sensor {
     uint16_t gs_bpp;            // Grayscale bytes per pixel.
     uint32_t hw_flags;          // Hardware flags (clock polarities/hw capabilities)
     const uint16_t *color_palette;    // Color palette used for color lookup.
+    bool disable_full_flush;    // Turn off default frame buffer flush policy when full.
 
     vsync_cb_t vsync_callback;  // VSYNC callback.
     frame_cb_t frame_callback;  // Frame callback.
@@ -175,6 +208,8 @@ typedef struct _sensor {
     pixformat_t pixformat;      // Pixel format
     framesize_t framesize;      // Frame size
     int framerate;              // Frame rate
+    uint32_t last_frame_ms;     // Last sampled frame timestamp in milliseconds.
+    bool last_frame_ms_valid;   // Last sampled frame timestamp in milliseconds valid.
     gainceiling_t gainceiling;  // AGC gainceiling
     bool hmirror;               // Horizontal Mirror
     bool vflip;                 // Vertical Flip
@@ -212,20 +247,37 @@ typedef struct _sensor {
     int  (*snapshot)            (sensor_t *sensor, image_t *image, uint32_t flags);
 } sensor_t;
 
+extern sensor_t sensor;
+
 // Resolution table
 extern const int resolution[][2];
+
+// Initialize the sensor state.
+void sensor_init0();
 
 // Initialize the sensor hardware and probe the image sensor.
 int sensor_init();
 
-// Initialize the sensor state.
-void sensor_init0();
+// Detect and initialize the image sensor.
+int sensor_probe_init(uint32_t bus_id, uint32_t bus_speed);
+
+// Configure DCMI hardware interface.
+int sensor_dcmi_config(uint32_t pixformat);
+
+// Abort frame capture and disable IRQs, DMA etc..
+int sensor_abort();
 
 // Reset the sensor to its default state.
 int sensor_reset();
 
 // Return sensor PID.
 int sensor_get_id();
+
+// Returns the xclk freq in hz.
+uint32_t sensor_get_xclk_frequency();
+
+// Returns the xclk freq in hz.
+int sensor_set_xclk_frequency(uint32_t frequency);
 
 // Return true if the sensor was detected and initialized.
 bool sensor_is_detected();
@@ -250,6 +302,15 @@ int sensor_set_framesize(framesize_t framesize);
 
 // Set the sensor frame rate.
 int sensor_set_framerate(int framerate);
+
+// Return the number of bytes per pixel to read from the image sensor.
+uint32_t sensor_get_src_bpp();
+
+// Return the number of bytes per pixel to write to memory.
+uint32_t sensor_get_dst_bpp();
+
+// Returns true if a crop is being applied to the frame buffer.
+bool sensor_get_cropped();
 
 // Set window size.
 int sensor_set_windowing(int x, int y, int w, int h);
@@ -339,7 +400,15 @@ int sensor_set_color_palette(const uint16_t *color_palette);
 // Get color palette
 const uint16_t *sensor_get_color_palette();
 
+// Return true if the current frame size/format fits in RAM.
+int sensor_check_framebuffer_size();
+
+// Auto-crop frame buffer until it fits in RAM (may switch pixel format to BAYER).
+int sensor_auto_crop_framebuffer();
+
 // Default snapshot function.
 int sensor_snapshot(sensor_t *sensor, image_t *image, uint32_t flags);
 
+// Convert sensor error codes to strings.
+const char *sensor_strerror(int error);
 #endif /* __SENSOR_H__ */

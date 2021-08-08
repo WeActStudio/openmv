@@ -23,6 +23,7 @@ SRCS += $(addprefix common/,    \
 	trace.c                     \
 	mutex.c                     \
 	usbdbg.c                    \
+	sensor_utils.c              \
    )
 
 SRCS += $(addprefix sensors/,   \
@@ -37,6 +38,7 @@ SRCS += $(addprefix sensors/,   \
 	lepton.c                    \
 	hm01b0.c                    \
 	gc2145.c                    \
+	paj6100.c                   \
    )
 
 SRCS += $(addprefix modules/,   \
@@ -79,6 +81,7 @@ SRCS += $(addprefix imlib/,     \
 	imlib.c                     \
 	integral.c                  \
 	integral_mw.c               \
+	jpegd.c                     \
 	jpeg.c                      \
 	kmeans.c                    \
 	lab_tab.c                   \

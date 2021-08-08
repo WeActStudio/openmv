@@ -1,4 +1,34 @@
 # Change Log
+## [4.1.0](https://github.com/openmv/openmv/releases/tag/v4.1.0) (2021-08-02)
+* Major updates and critical fixes to RP2 port.
+* Add networking and bluetooth support to the RP2 port.
+* Fix ULPI low power mode entry with USB disconnected.
+* Fix cambus lock-up on LDO power cycle.
+* Fix HM01B0 reset function return on failure.
+* Restructure sensor driver to remove common code from ports.
+* Fix cambus getting stuck sometimes after failed scan.
+* NRF: Support jump to bootloader.
+* Improved sensor errors reporting.
+* Add support for basic JPEG decoding.
+* Add WiFi module NINA-W102 driver.
+* Add HTTP/Post urequest library and examples.
+* Nano-RP2040: fully supported with WiFi and Bluetooth drivers.
+* Portenta: Add alternate I2C and PWM to support the breakout board.
+
+## [4.0.2](https://github.com/openmv/openmv/releases/tag/v4.0.2) (2021-06-19)
+* Update TinyUSB to 0.10.1
+* Update pico-sdk to 1.2.0
+* Update MT9M114 driver.
+* Update Python scripts and libraries.
+* Add support for PixArt image sensor PAJ6100.
+* Add soft frame rate control to STM32 sensor driver.
+* Add new RP2040 port (Pico and Nano RP2040 boards supported).
+* Improve snapshot error messages.
+* Use MDMA to offload line buffer processing on STM32.
+* Fix Portenta-H7 audio bug.
+* Fix Ethernet link status.
+* Fix servo bug (not re-initializing on reset).
+
 ## [4.0.1](https://github.com/openmv/openmv/releases/tag/v4.0.1) (2021-05-27)
 * Fix framebuffer corruption bug.
 * Fix servo timer.

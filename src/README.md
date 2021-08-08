@@ -42,7 +42,18 @@ Finally, you need to install the OpenMV GitHub Repo. In Linux, `cd` in a termina
 
     git clone --recursive https://github.com/openmv/openmv.git
 
-However, if you are interested in submitting code fixes back to us you will need to fork our repo first and clone your fork so that you can send pull requests. You need to fork these two repos:
+Note the above command will clone this repository and every submodule recursively, which may take a very long to complete. Alternatively, you can do the following for a much faster clone:
+
+```
+git clone --depth=1 https://github.com/openmv/openmv.git
+cd openmv
+git submodule update --init --depth=1 --no-single-branch
+git -C src/micropython/ submodule update --init --depth=1
+```
+
+### Setting up your own fork
+
+If you are interested in submitting code fixes back to us you will need to fork our repo first and clone your fork so that you can send pull requests. You need to fork these two repos:
 
     https://github.com/openmv/openmv.git
     https://github.com/openmv/micropython.git
@@ -63,6 +74,18 @@ This will setup the `openmv` and `micropython` repos so `origin` points to your 
     git push origin -u <your_name>/<some_branch_name>
 
 Finally, after pushing your changes you can then use Github to automatically generate a Pull Request to the official OpenMV Github repo to get your changes upstreamed into the official OpenMV Cam Firmware.
+
+### Docker Build
+
+To build the firmware using docker, follow the following steps:
+
+```
+git clone https://github.com/openmv/openmv.git --depth=50
+cd openmv/docker
+make TARGET=<TARGET NAME>
+```
+
+After building you should see the target build output under `docker/build/<TARGET_NAME>`.
 
 ### Committing Etiquette
 

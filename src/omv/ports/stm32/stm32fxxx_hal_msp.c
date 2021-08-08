@@ -11,7 +11,7 @@
 #include STM32_HAL_H
 #include "axiqos.h"
 #include "omv_boardconfig.h"
-
+#include "imlib.h"
 #include "irq.h"
 
 /* GPIO struct */
@@ -303,6 +303,24 @@ void HAL_I2C_MspInit(I2C_HandleTypeDef *hi2c)
 
         GPIO_InitStructure.Pin = ISC_I2C_SDA_PIN;
         HAL_GPIO_Init(ISC_I2C_PORT, &GPIO_InitStructure);
+    #if defined(ISC_I2C_ALT)
+    } else if (hi2c->Instance == ISC_I2C_ALT) {
+        /* Enable I2C clock */
+        ISC_I2C_ALT_CLK_ENABLE();
+
+        /* Configure ISC GPIOs */
+        GPIO_InitTypeDef GPIO_InitStructure;
+        GPIO_InitStructure.Pull      = GPIO_NOPULL;
+        GPIO_InitStructure.Speed     = GPIO_SPEED_LOW;
+        GPIO_InitStructure.Mode      = GPIO_MODE_AF_OD;
+        GPIO_InitStructure.Alternate = ISC_I2C_ALT_AF;
+
+        GPIO_InitStructure.Pin = ISC_I2C_ALT_SCL_PIN;
+        HAL_GPIO_Init(ISC_I2C_ALT_PORT, &GPIO_InitStructure);
+
+        GPIO_InitStructure.Pin = ISC_I2C_ALT_SDA_PIN;
+        HAL_GPIO_Init(ISC_I2C_ALT_PORT, &GPIO_InitStructure);
+    #endif
     } else if (hi2c->Instance == FIR_I2C) {
         /* Enable I2C clock */
         FIR_I2C_CLK_ENABLE();
@@ -329,6 +347,12 @@ void HAL_I2C_MspDeInit(I2C_HandleTypeDef *hi2c)
         ISC_I2C_FORCE_RESET();
         ISC_I2C_RELEASE_RESET();
         ISC_I2C_CLK_DISABLE();
+    #if defined(ISC_I2C_ALT)
+    } else if (hi2c->Instance == ISC_I2C_ALT) {
+        ISC_I2C_ALT_FORCE_RESET();
+        ISC_I2C_ALT_RELEASE_RESET();
+        ISC_I2C_ALT_CLK_DISABLE();
+    #endif
     } else if (hi2c->Instance == FIR_I2C) {
         FIR_I2C_FORCE_RESET();
         FIR_I2C_RELEASE_RESET();
@@ -345,12 +369,18 @@ void HAL_TIM_PWM_MspInit(TIM_HandleTypeDef *htim)
 
         /* Timer GPIO configuration */
         GPIO_InitTypeDef  GPIO_InitStructure;
-        GPIO_InitStructure.Pin       = DCMI_TIM_PIN;
         GPIO_InitStructure.Pull      = GPIO_PULLUP;
         GPIO_InitStructure.Speed     = GPIO_SPEED_HIGH;
         GPIO_InitStructure.Mode      = GPIO_MODE_AF_PP;
         GPIO_InitStructure.Alternate = DCMI_TIM_AF;
+
+        GPIO_InitStructure.Pin       = DCMI_TIM_PIN;
         HAL_GPIO_Init(DCMI_TIM_PORT, &GPIO_InitStructure);
+
+        #if defined(DCMI_TIM_EXT_PIN)
+        GPIO_InitStructure.Pin       = DCMI_TIM_EXT_PIN;
+        HAL_GPIO_Init(DCMI_TIM_EXT_PORT, &GPIO_InitStructure);
+        #endif
     }
     #endif // (OMV_XCLK_SOURCE == OMV_XCLK_TIM)
 
@@ -448,30 +478,30 @@ void HAL_SPI_MspInit(SPI_HandleTypeDef *hspi)
     }
     #endif
 
-    #if defined(LEPTON_SPI)
-    if (hspi->Instance == LEPTON_SPI) {
-        LEPTON_SPI_CLK_ENABLE();
+    #if defined(ISC_SPI)
+    if (hspi->Instance == ISC_SPI) {
+        ISC_SPI_CLK_ENABLE();
 
         GPIO_InitTypeDef GPIO_InitStructure;
         GPIO_InitStructure.Pull      = GPIO_PULLUP;
         GPIO_InitStructure.Mode      = GPIO_MODE_AF_PP;
         GPIO_InitStructure.Speed     = GPIO_SPEED_FREQ_LOW;
 
-        GPIO_InitStructure.Alternate = LEPTON_SPI_SCLK_AF;
-        GPIO_InitStructure.Pin       = LEPTON_SPI_SCLK_PIN;
-        HAL_GPIO_Init(LEPTON_SPI_SCLK_PORT, &GPIO_InitStructure);
+        GPIO_InitStructure.Alternate = ISC_SPI_SCLK_AF;
+        GPIO_InitStructure.Pin       = ISC_SPI_SCLK_PIN;
+        HAL_GPIO_Init(ISC_SPI_SCLK_PORT, &GPIO_InitStructure);
 
-        GPIO_InitStructure.Alternate = LEPTON_SPI_MISO_AF;
-        GPIO_InitStructure.Pin       = LEPTON_SPI_MISO_PIN;
-        HAL_GPIO_Init(LEPTON_SPI_MISO_PORT, &GPIO_InitStructure);
+        GPIO_InitStructure.Alternate = ISC_SPI_MISO_AF;
+        GPIO_InitStructure.Pin       = ISC_SPI_MISO_PIN;
+        HAL_GPIO_Init(ISC_SPI_MISO_PORT, &GPIO_InitStructure);
 
-        GPIO_InitStructure.Alternate = LEPTON_SPI_MOSI_AF;
-        GPIO_InitStructure.Pin       = LEPTON_SPI_MOSI_PIN;
-        HAL_GPIO_Init(LEPTON_SPI_MOSI_PORT, &GPIO_InitStructure);
+        GPIO_InitStructure.Alternate = ISC_SPI_MOSI_AF;
+        GPIO_InitStructure.Pin       = ISC_SPI_MOSI_PIN;
+        HAL_GPIO_Init(ISC_SPI_MOSI_PORT, &GPIO_InitStructure);
 
-        GPIO_InitStructure.Alternate = LEPTON_SPI_SSEL_AF;
-        GPIO_InitStructure.Pin       = LEPTON_SPI_SSEL_PIN;
-        HAL_GPIO_Init(LEPTON_SPI_SSEL_PORT, &GPIO_InitStructure);
+        GPIO_InitStructure.Alternate = ISC_SPI_SSEL_AF;
+        GPIO_InitStructure.Pin       = ISC_SPI_SSEL_PIN;
+        HAL_GPIO_Init(ISC_SPI_SSEL_PORT, &GPIO_InitStructure);
     }
     #endif
 }
@@ -683,17 +713,11 @@ void HAL_MspDeInit(void)
 
 }
 
-#if (OMV_HARDWARE_JPEG == 1)
-extern MDMA_HandleTypeDef JPEG_MDMA_Handle_In;
-extern MDMA_HandleTypeDef JPEG_MDMA_Handle_Out;
-#endif
-
 void MDMA_IRQHandler()
 {
     IRQ_ENTER(MDMA_IRQn);
     #if (OMV_HARDWARE_JPEG == 1)
-    HAL_MDMA_IRQHandler(&JPEG_MDMA_Handle_In);
-    HAL_MDMA_IRQHandler(&JPEG_MDMA_Handle_Out);
+    jpeg_mdma_irq_handler();
     #endif
     IRQ_EXIT(MDMA_IRQn);
 }
