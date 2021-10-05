@@ -35,6 +35,10 @@ target_compile_definitions(${MICROPY_TARGET} PRIVATE
     ${OMV_BOARD_MODULES_DEFINITIONS}
 )
 
+target_link_libraries(${MICROPY_TARGET}
+    pico_bootsel_via_double_reset
+)
+
 # Linker script
 add_custom_command(
     OUTPUT ${BUILD}/rp2.ld
@@ -85,6 +89,8 @@ target_include_directories(${MICROPY_TARGET} PRIVATE
     ${OMV_BOARD_CONFIG_DIR}
 )
 
+file(GLOB OMV_USER_MODULES ${TOP_DIR}/${OMV_DIR}/modules/*.c)
+
 target_sources(${MICROPY_TARGET} PRIVATE
     ${TOP_DIR}/${OMV_DIR}/alloc/xalloc.c
     ${TOP_DIR}/${OMV_DIR}/alloc/fb_alloc.c
@@ -112,17 +118,6 @@ target_sources(${MICROPY_TARGET} PRIVATE
     ${TOP_DIR}/${OMV_DIR}/sensors/lepton.c
     ${TOP_DIR}/${OMV_DIR}/sensors/hm01b0.c
     ${TOP_DIR}/${OMV_DIR}/sensors/gc2145.c
-
-    ${TOP_DIR}/${OMV_DIR}/modules/py_clock.c
-    ${TOP_DIR}/${OMV_DIR}/modules/py_gif.c
-    ${TOP_DIR}/${OMV_DIR}/modules/py_helper.c
-    ${TOP_DIR}/${OMV_DIR}/modules/py_image.c
-    ${TOP_DIR}/${OMV_DIR}/modules/py_imageio.c
-    ${TOP_DIR}/${OMV_DIR}/modules/py_mjpeg.c
-    ${TOP_DIR}/${OMV_DIR}/modules/py_omv.c
-    ${TOP_DIR}/${OMV_DIR}/modules/py_sensor.c
-    ${TOP_DIR}/${OMV_DIR}/modules/py_tf.c
-    ${TOP_DIR}/${OMV_DIR}/modules/py_fir.c
 
     ${TOP_DIR}/${OMV_DIR}/imlib/agast.c
     ${TOP_DIR}/${OMV_DIR}/imlib/apriltag.c
@@ -178,6 +173,8 @@ target_sources(${MICROPY_TARGET} PRIVATE
     ${TOP_DIR}/${OMV_DIR}/ports/${PORT}/main.c
     ${TOP_DIR}/${OMV_DIR}/ports/${PORT}/cambus.c
     ${TOP_DIR}/${OMV_DIR}/ports/${PORT}/sensor.c
+
+    ${OMV_USER_MODULES}
 )
 
 if(MICROPY_PY_SENSOR)
@@ -205,7 +202,7 @@ if(MICROPY_PY_AUDIO)
 
     target_compile_definitions(${MICROPY_TARGET} PRIVATE
         MICROPY_PY_AUDIO=1
-        #USE_LUT
+        USE_LUT
     )
 
     pico_generate_pio_header(${MICROPY_TARGET}
@@ -214,7 +211,7 @@ if(MICROPY_PY_AUDIO)
 endif()
 
 if(MICROPY_PY_ULAB)
-    set(MICROPY_ULAB_DIR "${MICROPY_DIR}/extmod/ulab")
+    set(MICROPY_ULAB_DIR "${TOP_DIR}/${OMV_DIR}/modules/ulab")
 
     target_include_directories(${MICROPY_TARGET} PRIVATE
         ${MICROPY_ULAB_DIR}/code/
@@ -249,6 +246,7 @@ if(MICROPY_PY_ULAB)
 
     target_compile_definitions(${MICROPY_TARGET} PRIVATE
         MICROPY_PY_ULAB=1
+        MODULE_ULAB_ENABLED=1
         ULAB_CONFIG_FILE="${OMV_BOARD_CONFIG_DIR}/ulab_config.h"
     )
 endif()

@@ -8,18 +8,17 @@
  *
  * IMU Python module.
  */
+#include "omv_boardconfig.h"
+#if MICROPY_PY_IMU
+
 #include "py/obj.h"
-#include "py/nlr.h"
 #include "py/mphal.h"
-#include "systick.h"
+#include "py/runtime.h"
 
 #include "lsm6ds3tr_c_reg.h"
-#include "omv_boardconfig.h"
 #include "py_helper.h"
 #include "py_imu.h"
 #include STM32_HAL_H
-
-#if MICROPY_PY_IMU
 
 typedef union {
   int16_t i16bit[3];
@@ -77,7 +76,9 @@ STATIC bool test_not_ready()
 
 STATIC void error_on_not_ready()
 {
-    if (test_not_ready()) nlr_raise(mp_obj_new_exception_msg(&mp_type_OSError, "IMU Not Ready!"));
+    if (test_not_ready()) {
+        mp_raise_msg(&mp_type_OSError, MP_ERROR_TEXT("IMU Not Ready!"));
+    }
 }
 
 STATIC mp_obj_t py_imu_tuple(float x, float y, float z)
@@ -280,4 +281,6 @@ float py_imu_pitch_rotation()
 
     return py_imu_get_pitch();
 }
+
+MP_REGISTER_MODULE(MP_QSTR_imu, imu_module, MICROPY_PY_IMU);
 #endif // MICROPY_PY_IMU
