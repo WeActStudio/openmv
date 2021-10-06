@@ -36,6 +36,7 @@ static enum {
     LCD_NONE,
     LCD_SHIELD_1_8,
     LCD_SHIELD_0_96,
+    LCD_SHIELD_1_8a,
     LCD_DISPLAY,
     LCD_DISPLAY_WITH_HDMI,
     LCD_DISPLAY_ONLY_HDMI
@@ -291,15 +292,10 @@ static void spi_config_init(int w, int h, int refresh_rate, bool triple_buffer, 
     // set Window
     uint8_t xPos = 0;
     uint8_t yPos = 0;
-    if (w == 128 && h == 160) { // LCD_SHIELD_1_8
-        OMV_SPI_LCD_RS_ON();
-        OMV_SPI_LCD_CS_LOW();
-        HAL_SPI_Transmit(OMV_SPI_LCD_CONTROLLER->spi, (uint8_t []) {0x20}, 1, HAL_MAX_DELAY); // choose panel
-        OMV_SPI_LCD_CS_HIGH();
-        OMV_SPI_LCD_RS_OFF();
-        xPos = 0;
-        yPos = 0;
-    } else if (w == 160 && h == 80) { // LCD_SHIELD_0_96
+
+    switch (lcd_type)
+    {
+    case LCD_SHIELD_0_96:
         OMV_SPI_LCD_RS_ON();
         OMV_SPI_LCD_CS_LOW();
         HAL_SPI_Transmit(OMV_SPI_LCD_CONTROLLER->spi, (uint8_t []) {0x21}, 1, HAL_MAX_DELAY); // choose panel
@@ -307,6 +303,27 @@ static void spi_config_init(int w, int h, int refresh_rate, bool triple_buffer, 
         OMV_SPI_LCD_RS_OFF();
         xPos = 1;
         yPos = 26;
+        break;
+    case LCD_SHIELD_1_8a:
+    case LCD_SHIELD_1_8:
+        OMV_SPI_LCD_RS_ON();
+        OMV_SPI_LCD_CS_LOW();
+        HAL_SPI_Transmit(OMV_SPI_LCD_CONTROLLER->spi, (uint8_t []) {0x20}, 1, HAL_MAX_DELAY); // choose panel
+        OMV_SPI_LCD_CS_HIGH();
+        OMV_SPI_LCD_RS_OFF();
+        if(lcd_type == LCD_SHIELD_1_8)
+        {
+            xPos = 0;
+            yPos = 0;
+        }
+        else
+        {
+            xPos = 2;
+            yPos = 1;
+        }
+        break;
+    default:
+        break;
     }
 
     OMV_SPI_LCD_RS_ON();
@@ -408,7 +425,7 @@ static const uint8_t memory_write[] = {0x2C};
 
 static void spi_lcd_callback(SPI_HandleTypeDef *hspi)
 {
-    if (lcd_type == LCD_SHIELD_1_8 || lcd_type == LCD_SHIELD_0_96) {
+    if (lcd_type == LCD_SHIELD_1_8 || lcd_type == LCD_SHIELD_1_8a || lcd_type == LCD_SHIELD_0_96) {
         static uint16_t *spi_tx_cb_state_memory_write_addr = NULL;
         static size_t spi_tx_cb_state_memory_write_count = 0;
         static bool spi_tx_cb_state_memory_write_first = false;
@@ -1468,6 +1485,7 @@ STATIC mp_obj_t py_lcd_deinit()
     switch (lcd_type) {
         #ifdef OMV_SPI_LCD_CONTROLLER
         case LCD_SHIELD_0_96:
+        case LCD_SHIELD_1_8a:
         case LCD_SHIELD_1_8: {
             spi_config_deinit();
             #ifdef OMV_SPI_LCD_BL_PIN
@@ -1521,6 +1539,7 @@ STATIC mp_obj_t py_lcd_init(uint n_args, const mp_obj_t *args, mp_map_t *kw_args
 
     switch (type) {
         #ifdef OMV_SPI_LCD_CONTROLLER
+        case LCD_SHIELD_1_8a: 
         case LCD_SHIELD_1_8: {
             int w = py_helper_keyword_int(n_args, args, 1, kw_args, MP_OBJ_NEW_QSTR(MP_QSTR_width), 128);
             if ((w <= 0) || (32767 < w)) mp_raise_msg(&mp_type_ValueError, MP_ERROR_TEXT("Invalid Width!"));
@@ -1530,32 +1549,29 @@ STATIC mp_obj_t py_lcd_init(uint n_args, const mp_obj_t *args, mp_map_t *kw_args
             if ((refresh_rate < 30) || (120 < refresh_rate)) mp_raise_msg(&mp_type_ValueError, MP_ERROR_TEXT("Invalid Refresh Rate!"));
             bool triple_buffer = py_helper_keyword_int(n_args, args, 4, kw_args, MP_OBJ_NEW_QSTR(MP_QSTR_triple_buffer), false);
             bool bgr = py_helper_keyword_int(n_args, args, 5, kw_args, MP_OBJ_NEW_QSTR(MP_QSTR_bgr), false);
-            spi_config_init(w, h, refresh_rate, triple_buffer, bgr);
-            #ifdef OMV_SPI_LCD_BL_PIN
-            spi_lcd_set_backlight(255); // to on state
-            #endif
             lcd_width = w;
             lcd_height = h;
-            lcd_type = LCD_SHIELD_1_8;
+            lcd_type = type;
             lcd_triple_buffer = triple_buffer;
             lcd_bgr = bgr;
             lcd_resolution = 0;
             lcd_refresh = refresh_rate;
-            break;
-        }
-        case LCD_SHIELD_0_96: {
-            int w = py_helper_keyword_int(n_args, args, 1, kw_args, MP_OBJ_NEW_QSTR(MP_QSTR_width), 160);
-            if ((w <= 0) || (32767 < w)) nlr_raise(mp_obj_new_exception_msg(&mp_type_ValueError, "Invalid Width!"));
-            int h = py_helper_keyword_int(n_args, args, 2, kw_args, MP_OBJ_NEW_QSTR(MP_QSTR_height), 80);
-            if ((h <= 0) || (32767 < h)) nlr_raise(mp_obj_new_exception_msg(&mp_type_ValueError, "Invalid Height!"));
-            int refresh_rate = py_helper_keyword_int(n_args, args, 3, kw_args, MP_OBJ_NEW_QSTR(MP_QSTR_refresh), 60);
-            if ((refresh_rate < 30) || (120 < refresh_rate)) nlr_raise(mp_obj_new_exception_msg(&mp_type_ValueError, "Invalid Refresh Rate!"));
-            bool triple_buffer = py_helper_keyword_int(n_args, args, 4, kw_args, MP_OBJ_NEW_QSTR(MP_QSTR_triple_buffer), false);
-            bool bgr = py_helper_keyword_int(n_args, args, 5, kw_args, MP_OBJ_NEW_QSTR(MP_QSTR_bgr), true);
+
             spi_config_init(w, h, refresh_rate, triple_buffer, bgr);
             #ifdef OMV_SPI_LCD_BL_PIN
             spi_lcd_set_backlight(255); // to on state
             #endif
+            break;
+        }
+        case LCD_SHIELD_0_96: {
+            int w = py_helper_keyword_int(n_args, args, 1, kw_args, MP_OBJ_NEW_QSTR(MP_QSTR_width), 160);
+            if ((w <= 0) || (32767 < w)) mp_raise_msg(&mp_type_ValueError, MP_ERROR_TEXT("Invalid Width!"));
+            int h = py_helper_keyword_int(n_args, args, 2, kw_args, MP_OBJ_NEW_QSTR(MP_QSTR_height), 80);
+            if ((h <= 0) || (32767 < h)) mp_raise_msg(&mp_type_ValueError, MP_ERROR_TEXT("Invalid Height!"));
+            int refresh_rate = py_helper_keyword_int(n_args, args, 3, kw_args, MP_OBJ_NEW_QSTR(MP_QSTR_refresh), 60);
+            if ((refresh_rate < 30) || (120 < refresh_rate)) mp_raise_msg(&mp_type_ValueError, MP_ERROR_TEXT("Invalid Refresh Rate!"));
+            bool triple_buffer = py_helper_keyword_int(n_args, args, 4, kw_args, MP_OBJ_NEW_QSTR(MP_QSTR_triple_buffer), false);
+            bool bgr = py_helper_keyword_int(n_args, args, 5, kw_args, MP_OBJ_NEW_QSTR(MP_QSTR_bgr), true);
             lcd_width = w;
             lcd_height = h;
             lcd_type = LCD_SHIELD_0_96;
@@ -1563,6 +1579,11 @@ STATIC mp_obj_t py_lcd_init(uint n_args, const mp_obj_t *args, mp_map_t *kw_args
             lcd_bgr = bgr;
             lcd_resolution = 0;
             lcd_refresh = refresh_rate;
+
+            spi_config_init(w, h, refresh_rate, triple_buffer, bgr);
+            #ifdef OMV_SPI_LCD_BL_PIN
+            spi_lcd_set_backlight(255); // to on state
+            #endif
             break;
         }
         #endif
@@ -1643,7 +1664,7 @@ STATIC MP_DEFINE_CONST_FUN_OBJ_0(py_lcd_bgr_obj, py_lcd_bgr);
 
 STATIC mp_obj_t py_lcd_framesize()
 {
-    if ((lcd_type == LCD_NONE) || (lcd_type == LCD_SHIELD_0_96) || (lcd_type == LCD_SHIELD_1_8)) return mp_const_none;
+    if ((lcd_type == LCD_NONE) || (lcd_type == LCD_SHIELD_0_96) || (lcd_type == LCD_SHIELD_1_8) || (lcd_type == LCD_SHIELD_1_8a)) return mp_const_none;
     return mp_obj_new_int(lcd_resolution);
 }
 STATIC MP_DEFINE_CONST_FUN_OBJ_0(py_lcd_framesize_obj, py_lcd_framesize);
@@ -1663,6 +1684,7 @@ STATIC mp_obj_t py_lcd_set_backlight(mp_obj_t intensity_obj)
     switch (lcd_type) {
         #if defined(OMV_SPI_LCD_CONTROLLER) && defined(OMV_SPI_LCD_BL_PIN)
         case LCD_SHIELD_0_96:
+        case LCD_SHIELD_1_8a:
         case LCD_SHIELD_1_8: {
             spi_lcd_set_backlight(intensity);
             break;
@@ -1859,6 +1881,7 @@ STATIC mp_obj_t py_lcd_display(uint n_args, const mp_obj_t *args, mp_map_t *kw_a
     switch (lcd_type) {
         #ifdef OMV_SPI_LCD_CONTROLLER
         case LCD_SHIELD_0_96:
+        case LCD_SHIELD_1_8a:
         case LCD_SHIELD_1_8: {
             fb_alloc_mark();
             spi_lcd_display(arg_img, arg_x_off, arg_y_off, arg_x_scale, arg_y_scale, &arg_roi,
@@ -1890,6 +1913,7 @@ STATIC mp_obj_t py_lcd_clear(uint n_args, const mp_obj_t *args)
     switch (lcd_type) {
         #ifdef OMV_SPI_LCD_CONTROLLER
         case LCD_SHIELD_0_96:
+        case LCD_SHIELD_1_8a:
         case LCD_SHIELD_1_8: {
             if (n_args && mp_obj_get_int(*args)) { // turns the display off (may not be black)
                 spi_lcd_clear();
@@ -1929,6 +1953,7 @@ STATIC const mp_rom_map_elem_t globals_dict_table[] = {
     { MP_ROM_QSTR(MP_QSTR___name__),                MP_OBJ_NEW_QSTR(MP_QSTR_lcd)                    },
     { MP_ROM_QSTR(MP_QSTR_LCD_NONE),                MP_ROM_INT(LCD_NONE)                            },
     { MP_ROM_QSTR(MP_QSTR_LCD_SHIELD_1_8),          MP_ROM_INT(LCD_SHIELD_1_8)                      },
+    { MP_ROM_QSTR(MP_QSTR_LCD_SHIELD_1_8a),         MP_ROM_INT(LCD_SHIELD_1_8a)                      },
     { MP_ROM_QSTR(MP_QSTR_LCD_SHIELD_0_96),         MP_ROM_INT(LCD_SHIELD_0_96)                     },
 #ifdef OMV_DVI_PRESENT
     { MP_ROM_QSTR(MP_QSTR_LCD_DISPLAY),             MP_ROM_INT(LCD_DISPLAY)                         },
