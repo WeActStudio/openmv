@@ -15,6 +15,7 @@
 #include "spi.h"
 
 #include "py_helper.h"
+#include "py_image.h"
 #include "omv_boardconfig.h"
 #include STM32_HAL_H
 
@@ -615,7 +616,7 @@ static void spi_tv_draw_image_cb_convert_grayscale(uint8_t *row_pointer_i, uint8
 static void spi_tv_draw_image_cb_convert_rgb565(uint16_t *row_pointer_i, uint8_t *row_pointer_o)
 {
     for (int i = 0, j = 0; i < TV_WIDTH; i += 2, j += 3) {
-        #if defined(MCU_SERIES_F4) || defined(MCU_SERIES_F7) || defined(MCU_SERIES_H7)
+        #if defined(ARM_MATH_DSP)
 
         int pixels = *((uint32_t *) (row_pointer_i + i));
         int r_pixels = ((pixels >> 8) & 0xf800f8) | ((pixels >> 13) & 0x70007);
@@ -679,13 +680,13 @@ static void spi_tv_display(image_t *src_img, int dst_x_start, int dst_y_start, f
                            const uint16_t *color_palette, const uint8_t *alpha_palette,
                            image_hint_t hint)
 {
-    bool rgb565 = ((rgb_channel == -1) && IMAGE_IS_COLOR(src_img)) || color_palette;
+    bool rgb565 = ((rgb_channel == -1) && src_img->is_color) || color_palette;
     imlib_draw_row_callback_t cb = rgb565 ? spi_tv_draw_image_cb_rgb565 : spi_tv_draw_image_cb_grayscale;
 
     image_t dst_img;
     dst_img.w = TV_WIDTH;
     dst_img.h = TV_HEIGHT;
-    dst_img.bpp = rgb565 ? IMAGE_BPP_RGB565 : IMAGE_BPP_GRAYSCALE;
+    dst_img.pixfmt = rgb565 ? PIXFORMAT_RGB565 : PIXFORMAT_GRAYSCALE;
 
     int x0, x1, y0, y1;
     bool black = !imlib_draw_image_rectangle(&dst_img, src_img, dst_x_start, dst_y_start, x_scale, y_scale,
@@ -957,7 +958,7 @@ STATIC MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(py_tv_channel_obj, 0, 1, py_tv_channe
 
 STATIC mp_obj_t py_tv_display(uint n_args, const mp_obj_t *args, mp_map_t *kw_args)
 {
-    image_t *arg_img = py_helper_arg_to_image_mutable_bayer_jpeg(args[0]);
+    image_t *arg_img = py_image_cobj(args[0]);
 
     int arg_x_off = 0;
     int arg_y_off = 0;

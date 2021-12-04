@@ -18,6 +18,7 @@
 #include "py_lcd_cec.h"
 #include "py_lcd_touch.h"
 #include "py_helper.h"
+#include "py_image.h"
 #include "extmod/machine_i2c.h"
 #include "omv_boardconfig.h"
 #include STM32_HAL_H
@@ -548,7 +549,7 @@ static void spi_lcd_display(image_t *src_img, int dst_x_start, int dst_y_start, 
     image_t dst_img;
     dst_img.w = lcd_width;
     dst_img.h = lcd_height;
-    dst_img.bpp = IMAGE_BPP_RGB565;
+    dst_img.pixfmt = PIXFORMAT_RGB565;
 
     int x0, x1, y0, y1;
     bool black = !imlib_draw_image_rectangle(&dst_img, src_img, dst_x_start, dst_y_start, x_scale, y_scale, roi, alpha, alpha_palette, hint, &x0, &x1, &y0, &y1);
@@ -1189,7 +1190,7 @@ static void ltdc_display(image_t *src_img, int dst_x_start, int dst_y_start, flo
     image_t dst_img;
     dst_img.w = lcd_width;
     dst_img.h = lcd_height;
-    dst_img.bpp = IMAGE_BPP_RGB565;
+    dst_img.pixfmt = PIXFORMAT_RGB565;
 
     int x0, x1, y0, y1;
     bool black = !imlib_draw_image_rectangle(&dst_img, src_img, dst_x_start, dst_y_start, x_scale, y_scale, roi, alpha, alpha_palette, hint, &x0, &x1, &y0, &y1);
@@ -1822,7 +1823,7 @@ STATIC MP_DEFINE_CONST_FUN_OBJ_1(py_lcd_get_point_y_position_obj, py_lcd_get_poi
 
 STATIC mp_obj_t py_lcd_display(uint n_args, const mp_obj_t *args, mp_map_t *kw_args)
 {
-    image_t *arg_img = py_helper_arg_to_image_mutable_bayer_jpeg(args[0]);
+    image_t *arg_img = py_image_cobj(args[0]);
 
     int arg_x_off = 0;
     int arg_y_off = 0;

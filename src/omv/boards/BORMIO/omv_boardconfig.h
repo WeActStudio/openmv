@@ -80,21 +80,29 @@
 #define OMV_CORE_VBAT           "3.0"
 
 // USB IRQn.
-#define OMV_USB_IRQN            (OTG_FS_IRQn)
+#define OMV_USB_IRQN            (OTG_HS_IRQn)
+#define OMV_USB_ULPI            (1)
+#define OMV_USB_ULPI_DIR_PORT   (GPIOC)
+#define OMV_USB_ULPI_DIR_PIN    (2)
+#define OMV_USB_ULPI_DIR_CLK_ENABLE()   __HAL_RCC_GPIOC_CLK_ENABLE()
 
-// PLL1 48MHz for SDMMC and FDCAN
-#define OMV_OSC_PLL1M           (16)
-#define OMV_OSC_PLL1N           (240)
+// Defined for cpu frequency scaling to override the revid.
+#define OMV_MAX_CPU_FREQ        (400)
+
+// PLL1 400MHz/40MHz for SDMMC and FDCAN
+// USB and RNG are clocked from the HSI48
+#define OMV_OSC_PLL1M           (5)
+#define OMV_OSC_PLL1N           (160)
 #define OMV_OSC_PLL1P           (2)
-#define OMV_OSC_PLL1Q           (20)
+#define OMV_OSC_PLL1Q           (16)
 #define OMV_OSC_PLL1R           (2)
 #define OMV_OSC_PLL1VCI         (RCC_PLL1VCIRANGE_2)
 #define OMV_OSC_PLL1VCO         (RCC_PLL1VCOWIDE)
 #define OMV_OSC_PLL1FRAC        (0)
 
 // PLL2 200MHz for FMC and QSPI.
-#define OMV_OSC_PLL2M           (16)
-#define OMV_OSC_PLL2N           (100)
+#define OMV_OSC_PLL2M           (5)
+#define OMV_OSC_PLL2N           (80)
 #define OMV_OSC_PLL2P           (2)
 #define OMV_OSC_PLL2Q           (2)
 #define OMV_OSC_PLL2R           (2)
@@ -103,31 +111,33 @@
 #define OMV_OSC_PLL2FRAC        (0)
 
 // PLL3 160MHz for ADC and SPI123
-#define OMV_OSC_PLL3M           (16)
-#define OMV_OSC_PLL3N           (80)
+#define OMV_OSC_PLL3M           (5)
+#define OMV_OSC_PLL3N           (160)
 #define OMV_OSC_PLL3P           (2)
-#define OMV_OSC_PLL3Q           (2)
+#define OMV_OSC_PLL3Q           (5)
 #define OMV_OSC_PLL3R           (2)
 #define OMV_OSC_PLL3VCI         (RCC_PLL3VCIRANGE_2)
 #define OMV_OSC_PLL3VCO         (RCC_PLL3VCOWIDE)
 #define OMV_OSC_PLL3FRAC        (0)
 
 // Clock Sources
-#define OMV_OSC_PLL_CLKSOURCE       RCC_PLLSOURCE_HSI
+#define OMV_OSC_PLL_CLKSOURCE       RCC_PLLSOURCE_HSE
 #define OMV_OSC_USB_CLKSOURCE       RCC_USBCLKSOURCE_HSI48
 #define OMV_OSC_RNG_CLKSOURCE       RCC_RNGCLKSOURCE_HSI48
 #define OMV_OSC_ADC_CLKSOURCE       RCC_ADCCLKSOURCE_PLL3
-#define OMV_OSC_SPI123_CLKSOURCE    RCC_SPI123CLKSOURCE_PLL3
+#define OMV_OSC_SPI45_CLKSOURCE     RCC_SPI45CLKSOURCE_PLL3
+#define OMV_OSC_SPI123_CLKSOURCE    RCC_SPI123CLKSOURCE_PLL2
+#define OMV_OSC_DFSDM1_CLKSOURCE    RCC_DFSDM1CLKSOURCE_D2PCLK1
 
 // HSE/HSI/CSI State
-#define OMV_OSC_HSI_STATE       (RCC_HSI_DIV1)
+#define OMV_OSC_HSE_STATE       (RCC_HSE_BYPASS)
 #define OMV_OSC_HSI48_STATE     (RCC_HSI48_ON)
 
 // Flash Latency
 #define OMV_FLASH_LATENCY       (FLASH_LATENCY_2)
 
 // Power supply configuration
-#define OMV_PWR_SUPPLY          (PWR_LDO_SUPPLY)
+#define OMV_PWR_SUPPLY          (PWR_SMPS_1V8_SUPPLIES_LDO)
 
 // Linker script constants (see the linker script template stm32fxxx.ld.S).
 // Note: fb_alloc is a stack-based, dynamically allocated memory on FB.
@@ -144,7 +154,7 @@
 #define OMV_FB_SIZE             (400K)      // FB memory: header + VGA/GS image
 #define OMV_FB_ALLOC_SIZE       (100K)      // minimum fb alloc size
 #define OMV_STACK_SIZE          (64K)
-#define OMV_HEAP_SIZE           (200K)
+#define OMV_HEAP_SIZE           (192K)
 
 #define OMV_LINE_BUF_SIZE       (3 * 1024)  // Image line buffer round(640 * 2BPP * 2 buffers).
 #define OMV_MSC_BUF_SIZE        (2K)        // USB MSC bot data
@@ -161,9 +171,9 @@
 #define OMV_ITCM_ORIGIN         0x00000000
 #define OMV_ITCM_LENGTH         64K
 #define OMV_SRAM1_ORIGIN        0x30000000
-#define OMV_SRAM1_LENGTH        248K
-#define OMV_SRAM2_ORIGIN        0x3003E000  // 8KB of SRAM1
-#define OMV_SRAM2_LENGTH        8K
+#define OMV_SRAM1_LENGTH        240K
+#define OMV_SRAM2_ORIGIN        0x3003C000  // 16KB of SRAM1
+#define OMV_SRAM2_LENGTH        16K
 #define OMV_SRAM3_ORIGIN        0x30040000
 #define OMV_SRAM3_LENGTH        32K
 #define OMV_SRAM4_ORIGIN        0x38000000
@@ -181,9 +191,9 @@
 
 // Domain 2 DMA buffers region.
 #define OMV_DMA_MEMORY_D2       SRAM2
-#define OMV_DMA_MEMORY_D2_SIZE  (1*1024) // Reserved memory for DMA buffers
+#define OMV_DMA_MEMORY_D2_SIZE  (6*1024) // Reserved memory for DMA buffers
 #define OMV_DMA_REGION_D2_BASE  (OMV_SRAM2_ORIGIN+(0*1024))
-#define OMV_DMA_REGION_D2_SIZE  MPU_REGION_SIZE_8KB
+#define OMV_DMA_REGION_D2_SIZE  MPU_REGION_SIZE_16KB
 
 // Domain 3 DMA buffers region.
 //#define OMV_DMA_MEMORY_D3       SRAM4
@@ -200,9 +210,10 @@
 #define ISC_I2C_AF              (GPIO_AF4_I2C3)
 #define ISC_I2C_CLK_ENABLE()    __I2C3_CLK_ENABLE()
 #define ISC_I2C_CLK_DISABLE()   __I2C3_CLK_DISABLE()
-#define ISC_I2C_PORT            (GPIOH)
-#define ISC_I2C_SCL_PIN         (GPIO_PIN_7)
-#define ISC_I2C_SDA_PIN         (GPIO_PIN_8)
+#define ISC_I2C_SCL_PORT        (GPIOA)
+#define ISC_I2C_SCL_PIN         (GPIO_PIN_8)
+#define ISC_I2C_SDA_PORT        (GPIOC)
+#define ISC_I2C_SDA_PIN         (GPIO_PIN_9)
 #define ISC_I2C_SPEED           (CAMBUS_SPEED_STANDARD)
 #define ISC_I2C_FORCE_RESET()   __HAL_RCC_I2C3_FORCE_RESET()
 #define ISC_I2C_RELEASE_RESET() __HAL_RCC_I2C3_RELEASE_RESET()
@@ -213,57 +224,65 @@
 #define FIR_I2C_AF              (GPIO_AF4_I2C1)
 #define FIR_I2C_CLK_ENABLE()    __I2C1_CLK_ENABLE()
 #define FIR_I2C_CLK_DISABLE()   __I2C1_CLK_DISABLE()
-#define FIR_I2C_PORT            (GPIOB)
-#define FIR_I2C_SCL_PIN         (GPIO_PIN_6)
-#define FIR_I2C_SDA_PIN         (GPIO_PIN_7)
+#define FIR_I2C_SCL_PORT        (GPIOB)
+#define FIR_I2C_SCL_PIN         (GPIO_PIN_8)
+#define FIR_I2C_SDA_PORT        (GPIOB)
+#define FIR_I2C_SDA_PIN         (GPIO_PIN_9)
 #define FIR_I2C_SPEED           (CAMBUS_SPEED_FULL)
 #define FIR_I2C_FORCE_RESET()   __HAL_RCC_I2C1_FORCE_RESET()
 #define FIR_I2C_RELEASE_RESET() __HAL_RCC_I2C1_RELEASE_RESET()
 
 /* DCMI */
-#define DCMI_TIM                (TIM1)
-#define DCMI_TIM_PIN            (GPIO_PIN_1)
-#define DCMI_TIM_PORT           (GPIOK)
-#define DCMI_TIM_AF             (GPIO_AF1_TIM1)
-#define DCMI_TIM_CHANNEL        (TIM_CHANNEL_1)
-#define DCMI_TIM_CLK_ENABLE()   __TIM1_CLK_ENABLE()
-#define DCMI_TIM_CLK_DISABLE()  __TIM1_CLK_DISABLE()
-#define DCMI_TIM_PCLK_FREQ()    HAL_RCC_GetPCLK2Freq()
+#define DCMI_TIM                (TIM3)
+#define DCMI_TIM_PORT           (GPIOA)
+#define DCMI_TIM_PIN            (GPIO_PIN_7)
+#define DCMI_TIM_AF             (GPIO_AF2_TIM3)
+#define DCMI_TIM_CHANNEL        (TIM_CHANNEL_2)
+#define DCMI_TIM_CLK_ENABLE()   __TIM3_CLK_ENABLE()
+#define DCMI_TIM_CLK_DISABLE()  __TIM3_CLK_DISABLE()
+#define DCMI_TIM_PCLK_FREQ()    HAL_RCC_GetPCLK1Freq()
 
-//#define DCMI_RESET_PIN          (GPIO_PIN_10)
 //#define DCMI_RESET_PORT         (GPIOA)
+//#define DCMI_RESET_PIN          (GPIO_PIN_10)
 
-#define DCMI_PWDN_PIN           (GPIO_PIN_3)
-#define DCMI_PWDN_PORT          (GPIOG)
+//#define DCMI_PWDN_PORT          (GPIOG)
+//#define DCMI_PWDN_PIN           (GPIO_PIN_3)
 
-//#define DCMI_FSYNC_PIN          (GPIO_PIN_4)
 //#define DCMI_FSYNC_PORT         (GPIOB)
+//#define DCMI_FSYNC_PIN          (GPIO_PIN_4)
 
-#define DCMI_D0_PIN             (GPIO_PIN_9)
-#define DCMI_D1_PIN             (GPIO_PIN_10)
-#define DCMI_D2_PIN             (GPIO_PIN_11)
-#define DCMI_D3_PIN             (GPIO_PIN_12)
-#define DCMI_D4_PIN             (GPIO_PIN_14)
-#define DCMI_D5_PIN             (GPIO_PIN_4)
-#define DCMI_D6_PIN             (GPIO_PIN_6)
-#define DCMI_D7_PIN             (GPIO_PIN_7)
+#define DCMI_D0_PORT            (GPIOC)
+#define DCMI_D0_PIN             (GPIO_PIN_6)
 
-#define DCMI_D0_PORT            (GPIOH)
-#define DCMI_D1_PORT            (GPIOH)
-#define DCMI_D2_PORT            (GPIOH)
-#define DCMI_D3_PORT            (GPIOH)
-#define DCMI_D4_PORT            (GPIOH)
-#define DCMI_D5_PORT            (GPIOI)
-#define DCMI_D6_PORT            (GPIOI)
-#define DCMI_D7_PORT            (GPIOI)
+#define DCMI_D1_PORT            (GPIOC)
+#define DCMI_D1_PIN             (GPIO_PIN_7)
 
-#define DCMI_HSYNC_PIN          (GPIO_PIN_4)
-#define DCMI_VSYNC_PIN          (GPIO_PIN_5)
-#define DCMI_PXCLK_PIN          (GPIO_PIN_6)
+#define DCMI_D2_PORT            (GPIOE)
+#define DCMI_D2_PIN             (GPIO_PIN_0)
+
+#define DCMI_D3_PORT            (GPIOE)
+#define DCMI_D3_PIN             (GPIO_PIN_1)
+
+#define DCMI_D4_PORT            (GPIOE)
+#define DCMI_D4_PIN             (GPIO_PIN_4)
+
+#define DCMI_D5_PORT            (GPIOD)
+#define DCMI_D5_PIN             (GPIO_PIN_3)
+
+#define DCMI_D6_PORT            (GPIOE)
+#define DCMI_D6_PIN             (GPIO_PIN_5)
+
+#define DCMI_D7_PORT            (GPIOE)
+#define DCMI_D7_PIN             (GPIO_PIN_6)
 
 #define DCMI_HSYNC_PORT         (GPIOA)
-#define DCMI_VSYNC_PORT         (GPIOI)
+#define DCMI_HSYNC_PIN          (GPIO_PIN_4)
+
+#define DCMI_VSYNC_PORT         (GPIOG)
+#define DCMI_VSYNC_PIN          (GPIO_PIN_9)
+
 #define DCMI_PXCLK_PORT         (GPIOA)
+#define DCMI_PXCLK_PIN          (GPIO_PIN_6)
 
 #if defined(DCMI_RESET_PIN)
 #define DCMI_RESET_LOW()        HAL_GPIO_WritePin(DCMI_RESET_PORT, DCMI_RESET_PIN, GPIO_PIN_RESET)
@@ -282,7 +301,7 @@
 #endif
 
 #define DCMI_VSYNC_IRQN         EXTI9_5_IRQn
-#define DCMI_VSYNC_IRQ_LINE     (7)
+#define DCMI_VSYNC_IRQ_LINE     (9)
 
 #define SOFT_I2C_PORT                GPIOC
 #define SOFT_I2C_SIOC_PIN            GPIO_PIN_10
@@ -299,26 +318,57 @@
 
 #define SOFT_I2C_SPIN_DELAY          64
 
-#define IMU_SPI                     (SPI2)
-#define IMU_SPI_AF                  (GPIO_AF5_SPI2)
-// SPI1/2/3 clock source is PLL2 (160MHz/16 == 10MHz).
+// DFSDM1
+#define AUDIO_DFSDM                     (DFSDM1_Channel2)
+#define AUDIO_DFSDM_CHANNEL             (DFSDM_CHANNEL_2)
+// DFSDM output clock is derived from the Aclk (set in SAI1SEL[2:0])
+// for SAI1 and DFSDM1, which is clocked from PLL1Q by default (50MHz).
+#define AUDIO_DFSDM_FREQMHZ             (50)
+#define AUDIO_MAX_CHANNELS              (1) // Maximum number of channels.
+
+#define AUDIO_DFSDM_CK_PORT             (GPIOD)
+#define AUDIO_DFSDM_CK_PIN              (GPIO_PIN_10)
+#define AUDIO_DFSDM_CK_AF               (GPIO_AF3_DFSDM1)
+
+#define AUDIO_DFSDM_D1_PORT             (GPIOE)
+#define AUDIO_DFSDM_D1_PIN              (GPIO_PIN_7)
+#define AUDIO_DFSDM_D1_AF               (GPIO_AF3_DFSDM1)
+
+#define AUDIO_DFSDM_FLT0                DFSDM1_Filter0
+#define AUDIO_DFSDM_FLT0_IRQ            DFSDM1_FLT0_IRQn
+#define AUDIO_DFSDM_FLT0_IRQHandler     DFSDM1_FLT0_IRQHandler
+#define AUDIO_DFSDM_FLT0_DMA_STREAM     DMA1_Stream1
+#define AUDIO_DFSDM_FLT0_DMA_REQUEST    DMA_REQUEST_DFSDM1_FLT0
+#define AUDIO_DFSDM_FLT0_DMA_IRQ        DMA1_Stream1_IRQn
+#define AUDIO_DFSDM_FLT0_DMA_IRQHandler DMA1_Stream1_IRQHandler
+
+#define AUDIO_DFSDM_CLK_ENABLE()        __HAL_RCC_DFSDM1_CLK_ENABLE()
+#define AUDIO_DFSDM_CLK_DISABLE()       __HAL_RCC_DFSDM1_CLK_DISABLE()
+#define AUDIO_DFSDM_DMA_CLK_ENABLE()    __HAL_RCC_DMA1_CLK_ENABLE()
+
+#define IMU_CHIP_LSM6DSOX           (1)
+#define IMU_SPI                     (SPI5)
+#define IMU_SPI_AF                  (GPIO_AF5_SPI5)
+// SPI4/5 clock source is PLL3 (160MHz/16 == 10MHz).
 #define IMU_SPI_PRESCALER           (SPI_BAUDRATEPRESCALER_16)
 
-#define IMU_SPI_RESET()             __HAL_RCC_SPI2_FORCE_RESET()
-#define IMU_SPI_RELEASE()           __HAL_RCC_SPI2_RELEASE_RESET()
+#define IMU_SPI_RESET()             __HAL_RCC_SPI5_FORCE_RESET()
+#define IMU_SPI_RELEASE()           __HAL_RCC_SPI5_RELEASE_RESET()
 
-#define IMU_SPI_CLK_ENABLE()        __HAL_RCC_SPI2_CLK_ENABLE()
-#define IMU_SPI_CLK_DISABLE()       __HAL_RCC_SPI2_CLK_DISABLE()
+#define IMU_SPI_CLK_ENABLE()        __HAL_RCC_SPI5_CLK_ENABLE()
+#define IMU_SPI_CLK_DISABLE()       __HAL_RCC_SPI5_CLK_DISABLE()
 
-#define IMU_SPI_SCLK_PIN            (GPIO_PIN_1)
-#define IMU_SPI_MISO_PIN            (GPIO_PIN_2)
-#define IMU_SPI_MOSI_PIN            (GPIO_PIN_3)
-#define IMU_SPI_SSEL_PIN            (GPIO_PIN_0)
+#define IMU_SPI_SSEL_PORT           (GPIOF)
+#define IMU_SPI_SSEL_PIN            (GPIO_PIN_6)
 
-#define IMU_SPI_SCLK_PORT           (GPIOI)
-#define IMU_SPI_MISO_PORT           (GPIOC)
-#define IMU_SPI_MOSI_PORT           (GPIOC)
-#define IMU_SPI_SSEL_PORT           (GPIOI)
+#define IMU_SPI_SCLK_PORT           (GPIOF)
+#define IMU_SPI_SCLK_PIN            (GPIO_PIN_7)
+
+#define IMU_SPI_MISO_PORT           (GPIOF)
+#define IMU_SPI_MISO_PIN            (GPIO_PIN_8)
+
+#define IMU_SPI_MOSI_PORT           (GPIOF)
+#define IMU_SPI_MOSI_PIN            (GPIO_PIN_11)
 
 // SPI LCD Interface
 #define OMV_SPI_LCD_CONTROLLER              (&spi_obj[3])
@@ -392,6 +442,10 @@
 #define OMV_FIR_LEPTON_CS_PORT              (GPIOE)
 #define OMV_FIR_LEPTON_CS_HIGH()            HAL_GPIO_WritePin(OMV_FIR_LEPTON_CS_PORT, OMV_FIR_LEPTON_CS_PIN, GPIO_PIN_SET)
 #define OMV_FIR_LEPTON_CS_LOW()             HAL_GPIO_WritePin(OMV_FIR_LEPTON_CS_PORT, OMV_FIR_LEPTON_CS_PIN, GPIO_PIN_RESET)
+
+// IMU Orientation
+#define OMV_IMU_X_Y_ROTATION_DEGREES        90
+#define OMV_IMU_MOUNTING_Z_DIRECTION        -1
 
 // Enable additional GPIO banks for DRAM...
 #define OMV_ENABLE_GPIO_BANK_F

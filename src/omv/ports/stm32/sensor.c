@@ -188,14 +188,12 @@ int sensor_init()
 int sensor_dcmi_config(uint32_t pixformat)
 {
     // VSYNC clock polarity
-    DCMIHandle.Init.VSPolarity  = SENSOR_HW_FLAGS_GET(&sensor, SENSOR_HW_FLAGS_VSYNC) ?
-                                    DCMI_VSPOLARITY_HIGH : DCMI_VSPOLARITY_LOW;
+    DCMIHandle.Init.VSPolarity  = sensor.hw_flags.vsync ? DCMI_VSPOLARITY_HIGH : DCMI_VSPOLARITY_LOW;
     // HSYNC clock polarity
-    DCMIHandle.Init.HSPolarity  = SENSOR_HW_FLAGS_GET(&sensor, SENSOR_HW_FLAGS_HSYNC) ?
-                                    DCMI_HSPOLARITY_HIGH : DCMI_HSPOLARITY_LOW;
+    DCMIHandle.Init.HSPolarity  = sensor.hw_flags.hsync ? DCMI_HSPOLARITY_HIGH : DCMI_HSPOLARITY_LOW;
     // PXCLK clock polarity
-    DCMIHandle.Init.PCKPolarity = SENSOR_HW_FLAGS_GET(&sensor, SENSOR_HW_FLAGS_PIXCK) ?
-                                    DCMI_PCKPOLARITY_RISING : DCMI_PCKPOLARITY_FALLING;
+    DCMIHandle.Init.PCKPolarity = sensor.hw_flags.pixck ? DCMI_PCKPOLARITY_RISING : DCMI_PCKPOLARITY_FALLING;
+
     // Setup capture parameters.
     DCMIHandle.Init.SynchroMode = DCMI_SYNCHRO_HARDWARE;    // Enable Hardware synchronization
     DCMIHandle.Init.CaptureRate = DCMI_CR_ALL_FRAME;        // Capture rate all frames
@@ -490,7 +488,7 @@ void DCMI_DMAConvCpltUser(uint32_t addr)
     // depth on the DCMI hardware and DMA hardware is not enough to prevent data loss.
 
     if (sensor.pixformat == PIXFORMAT_JPEG) {
-        if (sensor.chip_id == OV5640_ID) {
+        if (sensor.hw_flags.jpeg_mode == 4) {
             // JPEG MODE 4:
             //
             // The width and height are fixed in each frame. The first two bytes are valid data
@@ -511,7 +509,7 @@ void DCMI_DMAConvCpltUser(uint32_t addr)
             }
             unaligned_memcpy(buffer->data + buffer->offset, ((uint16_t *) addr) + 1, size);
             buffer->offset += size;
-        } else if (sensor.chip_id == OV2640_ID) {
+       } else if (sensor.hw_flags.jpeg_mode == 3) {
             // JPEG MODE 3:
             //
             // Compression data is transmitted with programmable width. The last line width maybe
@@ -601,7 +599,7 @@ void DCMI_DMAConvCpltUser(uint32_t addr)
             #if (OMV_ENABLE_SENSOR_MDMA == 1)
             mdma_memcpy(buffer, dst, src, sizeof(uint8_t), sensor.transpose);
             #else
-            if (sensor.gs_bpp == sizeof(uint8_t)) {
+            if (sensor.hw_flags.gs_bpp == 1) {
                 // 1BPP GRAYSCALE.
                 if (!sensor.transpose) {
                     unaligned_memcpy(dst, src, MAIN_FB()->u);
@@ -629,7 +627,8 @@ void DCMI_DMAConvCpltUser(uint32_t addr)
             #if (OMV_ENABLE_SENSOR_MDMA == 1)
             mdma_memcpy(buffer, dst16, src16, sizeof(uint16_t), sensor.transpose);
             #else
-            if (SENSOR_HW_FLAGS_GET(&sensor, SENSOR_HW_FLAGS_RGB565_REV)) {
+            if ((sensor.pixformat == PIXFORMAT_RGB565 && sensor.hw_flags.rgb_swap)
+            ||  (sensor.pixformat == PIXFORMAT_YUV422 && sensor.hw_flags.yuv_swap)) {
                 if (!sensor.transpose) {
                     unaligned_memcpy_rev16(dst16, src16, MAIN_FB()->u);
                 } else {
@@ -670,7 +669,8 @@ static void mdma_config(MDMA_InitTypeDef *init, sensor_t *sensor, uint32_t bytes
     init->SourceBlockAddressOffset  = 0;
     init->DestBlockAddressOffset    = 0;
 
-    if ((sensor->pixformat == PIXFORMAT_RGB565) && SENSOR_HW_FLAGS_GET(sensor, SENSOR_HW_FLAGS_RGB565_REV)) {
+    if ((sensor->pixformat == PIXFORMAT_RGB565 && sensor->hw_flags.rgb_swap)
+    ||  (sensor->pixformat == PIXFORMAT_YUV422 && sensor->hw_flags.yuv_swap)) {
         init->Endianness = MDMA_LITTLE_BYTE_ENDIANNESS_EXCHANGE;
     } else {
         init->Endianness = MDMA_LITTLE_ENDIANNESS_PRESERVE;
@@ -685,7 +685,7 @@ static void mdma_config(MDMA_InitTypeDef *init, sensor_t *sensor, uint32_t bytes
     }
 
     // YUV422 Source -> Y Destination
-    if ((sensor->pixformat == PIXFORMAT_GRAYSCALE) && (sensor->gs_bpp == sizeof(uint16_t))) {
+    if ((sensor->pixformat == PIXFORMAT_GRAYSCALE) && (sensor->hw_flags.gs_bpp == 2)) {
         line_width_bytes /= 2;
         if (sensor->transpose) {
             init->DestBlockAddressOffset /= 2;
@@ -722,7 +722,7 @@ static void mdma_config(MDMA_InitTypeDef *init, sensor_t *sensor, uint32_t bytes
     }
 
     // YUV422 Source -> Y Destination
-    if ((sensor->pixformat == PIXFORMAT_GRAYSCALE) && (sensor->gs_bpp == sizeof(uint16_t))) {
+    if ((sensor->pixformat == PIXFORMAT_GRAYSCALE) && (sensor->hw_flags.gs_bpp == 2)) {
         init->SourceInc         = MDMA_SRC_INC_HALFWORD;
         init->SourceDataSize    = MDMA_SRC_DATASIZE_BYTE;
     }
@@ -891,7 +891,7 @@ int sensor_snapshot(sensor_t *sensor, image_t *image, uint32_t flags)
 
     // Let the camera know we want to trigger it now.
     #if defined(DCMI_FSYNC_PIN)
-    if (SENSOR_HW_FLAGS_GET(sensor, SENSOR_HW_FLAGS_FSYNC)) {
+    if (sensor->hw_flags.fsync) {
         DCMI_FSYNC_HIGH();
     }
     #endif
@@ -917,7 +917,7 @@ int sensor_snapshot(sensor_t *sensor, image_t *image, uint32_t flags)
             sensor_abort();
 
             #if defined(DCMI_FSYNC_PIN)
-            if (SENSOR_HW_FLAGS_GET(sensor, SENSOR_HW_FLAGS_FSYNC)) {
+            if (sensor->hw_flags.fsync) {
                 DCMI_FSYNC_LOW();
             }
             #endif
@@ -935,7 +935,7 @@ int sensor_snapshot(sensor_t *sensor, image_t *image, uint32_t flags)
 
     // We're done receiving data.
     #if defined(DCMI_FSYNC_PIN)
-    if (SENSOR_HW_FLAGS_GET(sensor, SENSOR_HW_FLAGS_FSYNC)) {
+    if (sensor->hw_flags.fsync) {
         DCMI_FSYNC_LOW();
     }
     #endif
@@ -958,36 +958,48 @@ int sensor_snapshot(sensor_t *sensor, image_t *image, uint32_t flags)
     // Fix the BPP.
     switch (sensor->pixformat) {
         case PIXFORMAT_GRAYSCALE:
-            MAIN_FB()->bpp = IMAGE_BPP_GRAYSCALE;
+            MAIN_FB()->pixfmt = PIXFORMAT_GRAYSCALE;
             #if (OMV_ENABLE_SENSOR_MDMA == 1)
             // Flush data for MDMA
             SCB_InvalidateDCache_by_Addr(buffer->data, w * h);
             #endif
             break;
         case PIXFORMAT_RGB565:
-        case PIXFORMAT_YUV422:
-            MAIN_FB()->bpp = IMAGE_BPP_RGB565;
+            MAIN_FB()->pixfmt = PIXFORMAT_RGB565;
             #if (OMV_ENABLE_SENSOR_MDMA == 1)
             // Flush data for MDMA
             SCB_InvalidateDCache_by_Addr(buffer->data, w * h * sizeof(uint16_t));
             #endif
             break;
         case PIXFORMAT_BAYER:
-            MAIN_FB()->bpp = IMAGE_BPP_BAYER;
+            MAIN_FB()->pixfmt    = PIXFORMAT_BAYER;
+            MAIN_FB()->subfmt_id = sensor->hw_flags.bayer;
             #if (OMV_ENABLE_SENSOR_MDMA == 1)
             // Flush data for MDMA
             SCB_InvalidateDCache_by_Addr(buffer->data, w * h);
             #endif
             break;
-        case PIXFORMAT_JPEG:
+        case PIXFORMAT_YUV422: {
+            bool yuv_order = sensor->hw_flags.yuv_order == SENSOR_HW_FLAGS_YUV422;
+            int even = yuv_order ? PIXFORMAT_YUV422 : PIXFORMAT_YVU422;
+            int odd = yuv_order ? PIXFORMAT_YVU422 : PIXFORMAT_YUV422;
+            MAIN_FB()->pixfmt = (MAIN_FB()->x % 2) ? odd : even;
+            #if (OMV_ENABLE_SENSOR_MDMA == 1)
+            // Flush data for MDMA
+            SCB_InvalidateDCache_by_Addr(buffer->data, w * h * sizeof(uint16_t));
+            #endif
+            break;
+        }
+        case PIXFORMAT_JPEG: {
+            int32_t size = 0;
             if (sensor->chip_id == OV5640_ID) {
                 // Offset contains the sum of all the bytes transferred from the offset buffers
                 // while in DCMI_DMAConvCpltUser().
-                MAIN_FB()->bpp = buffer->offset;
+                size = buffer->offset;
             } else {
                 // Offset contains the number of length transfers completed. To get the number of bytes transferred
                 // within a transfer we have to look at the DMA counter and see how much data was moved.
-                int32_t size = buffer->offset * length;
+                size = buffer->offset * length;
 
                 if (__HAL_DMA_GET_COUNTER(&DMAHandle)) { // Add in the uncompleted transfer length.
                     size += ((length / sizeof(uint32_t)) - __HAL_DMA_GET_COUNTER(&DMAHandle)) * sizeof(uint32_t);
@@ -997,26 +1009,17 @@ int sensor_snapshot(sensor_t *sensor, image_t *image, uint32_t flags)
                 // Flush data for DMA
                 SCB_InvalidateDCache_by_Addr(buffer->data, size);
                 #endif
-
-                MAIN_FB()->bpp = size;
             }
-
             // Clean trailing data after 0xFFD9 at the end of the jpeg byte stream.
-            MAIN_FB()->bpp = jpeg_clean_trailing_bytes(MAIN_FB()->bpp, buffer->data);
+            MAIN_FB()->pixfmt = PIXFORMAT_JPEG;
+            MAIN_FB()->size = jpeg_clean_trailing_bytes(size, buffer->data);
             break;
+        }
         default:
             break;
     }
 
-    // Finally, return an image object.
-
     // Set the user image.
-    if (image != NULL) {
-        image->w = MAIN_FB()->w;
-        image->h = MAIN_FB()->h;
-        image->bpp = MAIN_FB()->bpp;
-        image->data = buffer->data;
-    }
-
+    framebuffer_init_image(image);
     return 0;
 }

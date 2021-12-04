@@ -118,7 +118,7 @@ static mp_obj_t py_sensor_snapshot(uint n_args, const mp_obj_t *args, mp_map_t *
     // We're not setting the full range on roll to prevent oscillation.
 #endif // MICROPY_PY_IMU
 
-    mp_obj_t image = py_image(0, 0, 0, 0);
+    mp_obj_t image = py_image(0, 0, 0, 0, 0);
     int error = sensor.snapshot(&sensor, (image_t *) py_image_cobj(image), 0);
     if (error != 0) {
         sensor_raise_error(error);
@@ -171,7 +171,7 @@ static mp_obj_t py_sensor_get_fb()
     }
 
     image_t image;
-    framebuffer_initialize_image(&image);
+    framebuffer_init_image(&image);
     return py_image_from_struct(&image);
 }
 
@@ -185,7 +185,7 @@ static mp_obj_t py_sensor_get_frame_available()
     return mp_obj_new_bool(framebuffer->tail != framebuffer->head);
 }
 
-static mp_obj_t py_sensor_alloc_extra_fb(mp_obj_t w_obj, mp_obj_t h_obj, mp_obj_t type_obj)
+static mp_obj_t py_sensor_alloc_extra_fb(mp_obj_t w_obj, mp_obj_t h_obj, mp_obj_t pixfmt_obj)
 {
     int w = mp_obj_get_int(w_obj);
     PY_ASSERT_TRUE_MSG(w > 0, "Width must be > 0");
@@ -193,32 +193,10 @@ static mp_obj_t py_sensor_alloc_extra_fb(mp_obj_t w_obj, mp_obj_t h_obj, mp_obj_
     int h = mp_obj_get_int(h_obj);
     PY_ASSERT_TRUE_MSG(h > 0, "Height must be > 0");
 
-    int type = mp_obj_get_int(type_obj);
-    PY_ASSERT_TRUE_MSG(type > 0, "Type must be > 0");
+    pixformat_t pixfmt = mp_obj_get_int(pixfmt_obj);
+    PY_ASSERT_TRUE_MSG(IMLIB_PIXFORMAT_IS_VALID(pixfmt), "Invalid Pixel Format");
 
-    image_t img = {
-        .w      = w,
-        .h      = h,
-        .bpp    = type,
-        .pixels = 0
-    };
-
-    switch(img.bpp) {
-        case PIXFORMAT_BINARY:
-            img.bpp = IMAGE_BPP_BINARY;
-            break;
-        case PIXFORMAT_GRAYSCALE:
-            img.bpp = IMAGE_BPP_GRAYSCALE;
-            break;
-        case PIXFORMAT_RGB565:
-            img.bpp = IMAGE_BPP_RGB565;
-            break;
-        case PIXFORMAT_BAYER:
-            img.bpp = IMAGE_BPP_BAYER;
-            break;
-        default:
-            break;
-    }
+    image_t img = {.w = w, .h = h, .pixfmt = pixfmt, .size = 0, .pixels = 0};
 
     // Alloc image first (could fail) then alloc RAM so that there's no leak on failure.
     mp_obj_t r = py_image_from_struct(&img);
@@ -1013,8 +991,8 @@ STATIC const mp_map_elem_t globals_dict_table[] = {
     { MP_OBJ_NEW_QSTR(MP_QSTR_BINARY),              MP_OBJ_NEW_SMALL_INT(PIXFORMAT_BINARY)},   /* 1BPP/BINARY*/
     { MP_OBJ_NEW_QSTR(MP_QSTR_GRAYSCALE),           MP_OBJ_NEW_SMALL_INT(PIXFORMAT_GRAYSCALE)},/* 1BPP/GRAYSCALE*/
     { MP_OBJ_NEW_QSTR(MP_QSTR_RGB565),              MP_OBJ_NEW_SMALL_INT(PIXFORMAT_RGB565)},   /* 2BPP/RGB565*/
-    { MP_OBJ_NEW_QSTR(MP_QSTR_YUV422),              MP_OBJ_NEW_SMALL_INT(PIXFORMAT_YUV422)},   /* 2BPP/YUV422*/
     { MP_OBJ_NEW_QSTR(MP_QSTR_BAYER),               MP_OBJ_NEW_SMALL_INT(PIXFORMAT_BAYER)},    /* 1BPP/RAW*/
+    { MP_OBJ_NEW_QSTR(MP_QSTR_YUV422),              MP_OBJ_NEW_SMALL_INT(PIXFORMAT_YUV422)},   /* 2BPP/YUV422*/
     { MP_OBJ_NEW_QSTR(MP_QSTR_JPEG),                MP_OBJ_NEW_SMALL_INT(PIXFORMAT_JPEG)},     /* JPEG/COMPRESSED*/
     { MP_OBJ_NEW_QSTR(MP_QSTR_OV2640),              MP_OBJ_NEW_SMALL_INT(OV2640_ID)},
     { MP_OBJ_NEW_QSTR(MP_QSTR_OV5640),              MP_OBJ_NEW_SMALL_INT(OV5640_ID)},

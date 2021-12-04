@@ -449,38 +449,15 @@ void HAL_SPI_RxCpltCallback(SPI_HandleTypeDef *hspi)
     }
 }
 
-static int sensor_check_buffsize(sensor_t *sensor)
-{
-    if (MAIN_FB()->n_buffers != 1) {
-        framebuffer_set_buffers(1);
-    }
-
-    int bpp=0;
-    switch (sensor->pixformat) {
-        case PIXFORMAT_BAYER:
-        case PIXFORMAT_GRAYSCALE:
-            bpp = 1;
-            break;
-        case PIXFORMAT_YUV422:
-        case PIXFORMAT_RGB565:
-            bpp = 2;
-            break;
-        default:
-            break;
-    }
-
-    if ((MAIN_FB()->u * MAIN_FB()->v * bpp) > framebuffer_get_buffer_size()) {
-        return -1;
-    }
-
-    return 0;
-}
-
 static int snapshot(sensor_t *sensor, image_t *image, uint32_t flags)
 {
     framebuffer_update_jpeg_buffer();
 
-    if (sensor_check_buffsize(sensor) == -1) {
+    if (MAIN_FB()->n_buffers != 1) {
+        framebuffer_set_buffers(1);
+    }
+
+    if (sensor_check_framebuffer_size(sensor) == -1) {
         return -1;
     }
 
@@ -543,27 +520,11 @@ static int snapshot(sensor_t *sensor, image_t *image, uint32_t flags)
         }
     } while (vospi_pid < vospi_packets); // only checking one volatile var so atomic.
 
-    MAIN_FB()->w = MAIN_FB()->u;
-    MAIN_FB()->h = MAIN_FB()->v;
+    MAIN_FB()->w        = MAIN_FB()->u;
+    MAIN_FB()->h        = MAIN_FB()->v;
+    MAIN_FB()->pixfmt   = sensor->pixformat;
 
-    switch (sensor->pixformat) {
-        case PIXFORMAT_GRAYSCALE: {
-            MAIN_FB()->bpp = IMAGE_BPP_GRAYSCALE;
-            break;
-        }
-        case PIXFORMAT_RGB565: {
-            MAIN_FB()->bpp = IMAGE_BPP_RGB565;
-            break;
-        }
-        default: {
-            break;
-        }
-    }
-
-    image->w = MAIN_FB()->u;
-    image->h = MAIN_FB()->v;
-    image->bpp = MAIN_FB()->bpp; // invalid
-    image->data = buffer->data; // valid
+    framebuffer_init_image(image);
 
     uint16_t *src = (uint16_t*) vospi_buffer;
 
@@ -632,7 +593,6 @@ static int snapshot(sensor_t *sensor, image_t *image, uint32_t flags)
 
 int lepton_init(sensor_t *sensor)
 {
-    sensor->gs_bpp              = sizeof(uint8_t);
     sensor->reset               = reset;
     sensor->sleep               = sleep;
     sensor->snapshot            = snapshot;
@@ -658,11 +618,12 @@ int lepton_init(sensor_t *sensor)
     sensor->set_lens_correction = set_lens_correction;
     sensor->ioctl               = ioctl;
 
-    SENSOR_HW_FLAGS_SET(sensor, SENSOR_HW_FLAGS_VSYNC, 1);
-    SENSOR_HW_FLAGS_SET(sensor, SENSOR_HW_FLAGS_HSYNC, 0);
-    SENSOR_HW_FLAGS_SET(sensor, SENSOR_HW_FLAGS_PIXCK, 0);
-    SENSOR_HW_FLAGS_SET(sensor, SENSOR_HW_FLAGS_FSYNC, 0);
-    SENSOR_HW_FLAGS_SET(sensor, SENSOR_HW_FLAGS_JPEGE, 0);
+    sensor->hw_flags.vsync      = 1;
+    sensor->hw_flags.hsync      = 0;
+    sensor->hw_flags.pixck      = 0;
+    sensor->hw_flags.fsync      = 0;
+    sensor->hw_flags.jpege      = 0;
+    sensor->hw_flags.gs_bpp     = 1;
 
     // Configure the DMA handler for Transmission process
     DMAHandle.Instance                 = ISC_SPI_DMA_STREAM;

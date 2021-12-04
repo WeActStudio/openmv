@@ -14,36 +14,38 @@
 #include "cambus.h"
 #include "imlib.h"
 
-#define OV2640_SLV_ADDR     (0x60)
-#define OV5640_SLV_ADDR     (0x78)
-#define OV7725_SLV_ADDR     (0x42)
-#define MT9V034_SLV_ADDR    (0xB8)
-#define MT9M114_SLV_ADDR    (0x90)
-#define LEPTON_SLV_ADDR     (0x54)
-#define HM01B0_SLV_ADDR     (0x48)
-#define GC2145_SLV_ADDR     (0x78)
+#define OV2640_SLV_ADDR         (0x60)
+#define OV5640_SLV_ADDR         (0x78)
+#define OV7725_SLV_ADDR         (0x42)
+#define MT9V034_SLV_ADDR        (0xB8)
+#define MT9M114_SLV_ADDR        (0x90)
+#define LEPTON_SLV_ADDR         (0x54)
+#define HM01B0_SLV_ADDR         (0x48)
+#define GC2145_SLV_ADDR         (0x78)
+#define FROGEYE2020_SLV_ADDR    (0x6E)
 
 // Chip ID Registers
-#define OV5640_CHIP_ID      (0x300A)
-#define OV_CHIP_ID          (0x0A)
-#define ON_CHIP_ID          (0x00)
-#define HIMAX_CHIP_ID       (0x0001)
-#define GC_CHIP_ID          (0xF0)
+#define OV5640_CHIP_ID          (0x300A)
+#define OV_CHIP_ID              (0x0A)
+#define ON_CHIP_ID              (0x00)
+#define HIMAX_CHIP_ID           (0x0001)
+#define GC_CHIP_ID              (0xF0)
 
 // Chip ID Values
-#define OV2640_ID           (0x26)
-#define OV5640_ID           (0x56)
-#define OV7670_ID           (0x76)
-#define OV7690_ID           (0x76)
-#define OV7725_ID           (0x77)
-#define OV9650_ID           (0x96)
-#define MT9V034_ID          (0x13)
-#define MT9M114_ID          (0x2481)
-#define LEPTON_ID           (0x54)
-#define HM01B0_ID           (0xB0)
-#define GC2145_ID           (0x21)
+#define OV2640_ID               (0x26)
+#define OV5640_ID               (0x56)
+#define OV7670_ID               (0x76)
+#define OV7690_ID               (0x76)
+#define OV7725_ID               (0x77)
+#define OV9650_ID               (0x96)
+#define MT9V034_ID              (0x13)
+#define MT9M114_ID              (0x2481)
+#define LEPTON_ID               (0x54)
+#define HM01B0_ID               (0xB0)
+#define GC2145_ID               (0x21)
 // Wide ID
-#define PAJ6100_ID          (0x6100)
+#define PAJ6100_ID              (0x6100)
+#define FROGEYE2020_ID          (0x2020)
 
 typedef enum {
     FRAMESIZE_INVALID = 0,
@@ -173,15 +175,14 @@ typedef enum {
     SENSOR_ERROR_JPEG_OVERFLOW          = -20,
 } sensor_error_t;
 
-#define SENSOR_HW_FLAGS_VSYNC           (0) // vertical sync polarity.
-#define SENSOR_HW_FLAGS_HSYNC           (1) // horizontal sync polarity.
-#define SENSOR_HW_FLAGS_PIXCK           (2) // pixel clock edge.
-#define SENSOR_HW_FLAGS_FSYNC           (3) // hardware frame sync.
-#define SENSOR_HW_FLAGS_JPEGE           (4) // hardware JPEG encoder.
-#define SENSOR_HW_FLAGS_RGB565_REV      (5) // byte reverse rgb565.
-#define SENSOR_HW_FLAGS_GET(s, x)       ((s)->hw_flags &  (1<<x))
-#define SENSOR_HW_FLAGS_SET(s, x, v)    ((s)->hw_flags |= (v<<x))
-#define SENSOR_HW_FLAGS_CLR(s, x)       ((s)->hw_flags &= ~(1<<x))
+// Bayer patterns.
+// NOTE: These must match the Bayer subformats in imlib.h
+#define SENSOR_HW_FLAGS_BAYER_BGGR      (SUBFORMAT_ID_BGGR)
+#define SENSOR_HW_FLAGS_BAYER_GBRG      (SUBFORMAT_ID_GBRG)
+#define SENSOR_HW_FLAGS_BAYER_GRBG      (SUBFORMAT_ID_GRBG)
+#define SENSOR_HW_FLAGS_BAYER_RGGB      (SUBFORMAT_ID_RGGB)
+#define SENSOR_HW_FLAGS_YUV422          (SUBFORMAT_ID_YUV422)
+#define SENSOR_HW_FLAGS_YVU422          (SUBFORMAT_ID_YVU422)
 
 typedef void (*vsync_cb_t)(uint32_t vsync);
 typedef void (*frame_cb_t)();
@@ -193,8 +194,22 @@ typedef struct _sensor {
     uint16_t chip_id_w;         // Sensor ID 16 bits.
     };
     uint8_t  slv_addr;          // Sensor I2C slave address.
-    uint16_t gs_bpp;            // Grayscale bytes per pixel.
-    uint32_t hw_flags;          // Hardware flags (clock polarities/hw capabilities)
+
+    // Hardware flags (clock polarities, hw capabilities etc..)
+    struct {
+        uint32_t vsync:1;       // Vertical sync polarity.
+        uint32_t hsync:1;       // Horizontal sync polarity.
+        uint32_t pixck:1;       // Pixel clock edge.
+        uint32_t fsync:1;       // Hardware frame sync.
+        uint32_t jpege:1;       // Hardware jpeg encoder.
+        uint32_t jpeg_mode:3;   // JPEG mode.
+        uint32_t gs_bpp:2;      // Grayscale bytes per pixel output.
+        uint32_t rgb_swap:1;    // Byte-swap 2BPP RGB formats after capture.
+        uint32_t yuv_swap:1;    // Byte-swap 2BPP YUV formats after capture.
+        uint32_t bayer:3;       // Bayer/CFA pattern.
+        uint32_t yuv_order:1;   // YUV/YVU order.
+    } hw_flags;
+
     const uint16_t *color_palette;    // Color palette used for color lookup.
     bool disable_full_flush;    // Turn off default frame buffer flush policy when full.
 

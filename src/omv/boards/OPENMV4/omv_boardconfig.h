@@ -18,7 +18,7 @@
 #define OMV_UNIQUE_ID_SIZE      3 // 3 words
 
 // Needed by the SWD JTAG testrig - located at the bottom of the frame buffer stack.
-#define OMV_SELF_TEST_SWD_ADDR  MAIN_FB()->bpp
+#define OMV_SELF_TEST_SWD_ADDR  MAIN_FB()->pixfmt
 
 // Flash sectors for the bootloader.
 // Flash FS sector, main FW sector, max sector.
@@ -64,6 +64,7 @@
 #define OMV_ENABLE_LEPTON       (1)
 #define OMV_ENABLE_HM01B0       (0)
 #define OMV_ENABLE_PAJ6100      (1)
+#define OMV_ENABLE_FROGEYE2020  (1)
 
 // Set which OV767x sensor is used
 #define OMV_OV7670_VERSION      (70)
@@ -212,8 +213,9 @@
 #define ISC_I2C_AF              (GPIO_AF4_I2C1)
 #define ISC_I2C_CLK_ENABLE()    __I2C1_CLK_ENABLE()
 #define ISC_I2C_CLK_DISABLE()   __I2C1_CLK_DISABLE()
-#define ISC_I2C_PORT            (GPIOB)
+#define ISC_I2C_SCL_PORT        (GPIOB)
 #define ISC_I2C_SCL_PIN         (GPIO_PIN_8)
+#define ISC_I2C_SDA_PORT        (GPIOB)
 #define ISC_I2C_SDA_PIN         (GPIO_PIN_9)
 #define ISC_I2C_SPEED           (CAMBUS_SPEED_STANDARD)
 #define ISC_I2C_FORCE_RESET()   __HAL_RCC_I2C1_FORCE_RESET()
@@ -225,8 +227,9 @@
 #define FIR_I2C_AF              (GPIO_AF4_I2C2)
 #define FIR_I2C_CLK_ENABLE()    __I2C2_CLK_ENABLE()
 #define FIR_I2C_CLK_DISABLE()   __I2C2_CLK_DISABLE()
-#define FIR_I2C_PORT            (GPIOB)
+#define FIR_I2C_SCL_PORT        (GPIOB)
 #define FIR_I2C_SCL_PIN         (GPIO_PIN_10)
+#define FIR_I2C_SDA_PORT        (GPIOB)
 #define FIR_I2C_SDA_PIN         (GPIO_PIN_11)
 #define FIR_I2C_SPEED           (CAMBUS_SPEED_FULL)
 #define FIR_I2C_FORCE_RESET()   __HAL_RCC_I2C2_FORCE_RESET()
@@ -368,6 +371,7 @@
 // The IMU sensor is on the same SPI bus pins as the camera module interface
 // SPI bus. While the buses overlap both devices will never be in-use at once.
 
+#define IMU_CHIP_LSM6DS3            (1)
 #define IMU_SPI                     (SPI1)
 #define IMU_SPI_AF                  (GPIO_AF5_SPI1)
 // SPI1/2/3 clock source is PLL2 (160MHz/16 == 10MHz).

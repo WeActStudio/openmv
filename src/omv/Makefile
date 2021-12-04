@@ -39,6 +39,7 @@ SRCS += $(addprefix sensors/,   \
 	hm01b0.c                    \
 	gc2145.c                    \
 	paj6100.c                   \
+	frogeye2020.c               \
    )
 
 SRCS += $(addprefix imlib/,     \
@@ -91,6 +92,7 @@ SRCS += $(addprefix imlib/,     \
 	stats.c                     \
 	template.c                  \
 	xyz_tab.c                   \
+	yuv.c                       \
 	zbar.c                      \
    )
 

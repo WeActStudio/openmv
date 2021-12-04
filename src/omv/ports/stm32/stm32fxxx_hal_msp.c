@@ -299,10 +299,10 @@ void HAL_I2C_MspInit(I2C_HandleTypeDef *hi2c)
         GPIO_InitStructure.Alternate = ISC_I2C_AF;
 
         GPIO_InitStructure.Pin = ISC_I2C_SCL_PIN;
-        HAL_GPIO_Init(ISC_I2C_PORT, &GPIO_InitStructure);
+        HAL_GPIO_Init(ISC_I2C_SCL_PORT, &GPIO_InitStructure);
 
         GPIO_InitStructure.Pin = ISC_I2C_SDA_PIN;
-        HAL_GPIO_Init(ISC_I2C_PORT, &GPIO_InitStructure);
+        HAL_GPIO_Init(ISC_I2C_SDA_PORT, &GPIO_InitStructure);
     #if defined(ISC_I2C_ALT)
     } else if (hi2c->Instance == ISC_I2C_ALT) {
         /* Enable I2C clock */
@@ -316,10 +316,10 @@ void HAL_I2C_MspInit(I2C_HandleTypeDef *hi2c)
         GPIO_InitStructure.Alternate = ISC_I2C_ALT_AF;
 
         GPIO_InitStructure.Pin = ISC_I2C_ALT_SCL_PIN;
-        HAL_GPIO_Init(ISC_I2C_ALT_PORT, &GPIO_InitStructure);
+        HAL_GPIO_Init(ISC_I2C_ALT_SCL_PORT, &GPIO_InitStructure);
 
         GPIO_InitStructure.Pin = ISC_I2C_ALT_SDA_PIN;
-        HAL_GPIO_Init(ISC_I2C_ALT_PORT, &GPIO_InitStructure);
+        HAL_GPIO_Init(ISC_I2C_ALT_SDA_PORT, &GPIO_InitStructure);
     #endif
     } else if (hi2c->Instance == FIR_I2C) {
         /* Enable I2C clock */
@@ -333,10 +333,10 @@ void HAL_I2C_MspInit(I2C_HandleTypeDef *hi2c)
         GPIO_InitStructure.Alternate = FIR_I2C_AF;
 
         GPIO_InitStructure.Pin = FIR_I2C_SCL_PIN;
-        HAL_GPIO_Init(FIR_I2C_PORT, &GPIO_InitStructure);
+        HAL_GPIO_Init(FIR_I2C_SCL_PORT, &GPIO_InitStructure);
 
         GPIO_InitStructure.Pin = FIR_I2C_SDA_PIN;
-        HAL_GPIO_Init(FIR_I2C_PORT, &GPIO_InitStructure);
+        HAL_GPIO_Init(FIR_I2C_SDA_PORT, &GPIO_InitStructure);
     }
 
 }
@@ -540,6 +540,38 @@ void HAL_SAI_MspDeInit(SAI_HandleTypeDef* hsai)
         AUDIO_SAI_CLK_DISABLE();
         HAL_GPIO_DeInit(AUDIO_SAI_CK_PORT, AUDIO_SAI_CK_PIN);
         HAL_GPIO_DeInit(AUDIO_SAI_D1_PORT, AUDIO_SAI_D1_PIN);
+    }
+}
+#elif defined(AUDIO_DFSDM)
+void HAL_DFSDM_ChannelMspInit(DFSDM_Channel_HandleTypeDef *hdfsdm)
+{
+    GPIO_InitTypeDef GPIO_InitStruct;
+    if (hdfsdm->Instance == AUDIO_DFSDM) {
+        AUDIO_DFSDM_CLK_ENABLE();
+
+        GPIO_InitStruct.Pin = AUDIO_DFSDM_CK_PIN;
+        GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
+        GPIO_InitStruct.Pull = GPIO_NOPULL;
+        GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+        GPIO_InitStruct.Alternate = AUDIO_DFSDM_CK_AF;
+        HAL_GPIO_Init(AUDIO_DFSDM_CK_PORT, &GPIO_InitStruct);
+
+        GPIO_InitStruct.Pin = AUDIO_DFSDM_D1_PIN;
+        GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
+        GPIO_InitStruct.Pull = GPIO_NOPULL;
+        GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_HIGH;
+        GPIO_InitStruct.Alternate = AUDIO_DFSDM_D1_AF;
+        HAL_GPIO_Init(AUDIO_DFSDM_D1_PORT, &GPIO_InitStruct);
+    }
+}
+
+void HAL_DFSDM_ChannelMspDeInit(DFSDM_Channel_HandleTypeDef *hdfsdm)
+{
+    if (hdfsdm->Instance == AUDIO_DFSDM) {
+        AUDIO_DFSDM_CLK_DISABLE();
+
+        HAL_GPIO_DeInit(AUDIO_DFSDM_CK_PORT, AUDIO_DFSDM_CK_PIN);
+        HAL_GPIO_DeInit(AUDIO_DFSDM_D1_PORT, AUDIO_DFSDM_D1_PIN);
     }
 }
 #endif

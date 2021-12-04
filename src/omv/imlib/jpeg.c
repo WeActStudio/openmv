@@ -43,8 +43,8 @@ static const uint32_t jpeg_expand[16] = {0x80808080, 0x8080807f, 0x80807f80, 0x8
 
 static void jpeg_get_mcu(image_t *src, int x_offset, int y_offset, int dx, int dy, int8_t *Y0, int8_t *CB, int8_t *CR)
 {
-    switch (src->bpp) {
-        case IMAGE_BPP_BINARY: {
+    switch (src->pixfmt) {
+        case PIXFORMAT_BINARY: {
             if ((dx != MCU_W) || (dy != MCU_H)) { // partial MCU, fill with 0's to start
                 memset(Y0, 0, JPEG_444_GS_MCU_SIZE);
             }
@@ -82,7 +82,7 @@ static void jpeg_get_mcu(image_t *src, int x_offset, int y_offset, int dx, int d
             }
             break;
         }
-        case IMAGE_BPP_GRAYSCALE: {
+        case PIXFORMAT_GRAYSCALE: {
             if ((dx != MCU_W) || (dy != MCU_H)) { // partial MCU, fill with 0's to start
                 memset(Y0, 0, JPEG_444_GS_MCU_SIZE);
             }
@@ -146,9 +146,11 @@ static void jpeg_get_mcu(image_t *src, int x_offset, int y_offset, int dx, int d
             }
             break;
         }
-        case IMAGE_BPP_RGB565: {
+        case PIXFORMAT_RGB565: {
             if ((dx != MCU_W) || (dy != MCU_H)) { // partial MCU, fill with 0's to start
-                memset(Y0, 0, JPEG_444_YCBCR_MCU_SIZE);
+                memset(Y0, 0, JPEG_444_GS_MCU_SIZE);
+                memset(CB, 0, JPEG_444_GS_MCU_SIZE);
+                memset(CR, 0, JPEG_444_GS_MCU_SIZE);
             }
 
             for (int y = y_offset, yy = y + dy, index = 0; y < yy; y++) {
@@ -220,9 +222,79 @@ static void jpeg_get_mcu(image_t *src, int x_offset, int y_offset, int dx, int d
             }
             break;
         }
-        case IMAGE_BPP_BAYER: {
+        case PIXFORMAT_YUV_ANY: {
             if ((dx != MCU_W) || (dy != MCU_H)) { // partial MCU, fill with 0's to start
-                memset(Y0, 0, JPEG_444_YCBCR_MCU_SIZE);
+                memset(Y0, 0, JPEG_444_GS_MCU_SIZE);
+                memset(CB, 0, JPEG_444_GS_MCU_SIZE);
+                memset(CR, 0, JPEG_444_GS_MCU_SIZE);
+            }
+
+            int shift = (src->pixfmt == PIXFORMAT_YUV422) ? 24 : 8;
+
+            for (int y = y_offset, yy = y + dy, index = 0; y < yy; y++) {
+                uint32_t *rp = (uint32_t *) (IMAGE_COMPUTE_YUV_PIXEL_ROW_PTR(src, y) + x_offset);
+
+                for (int x = 0, xx = dx - 1; x < xx; x += 2, index += 2) {
+                    int pixels = *rp++;
+
+                    #if (OMV_HARDWARE_JPEG == 0)
+                    pixels ^= 0x80808080;
+                    #endif
+
+                    Y0[index] = pixels, Y0[index + 1] = pixels >> 16;
+
+                    int cb = pixels >> shift;
+                    CB[index] = cb, CB[index + 1] = cb;
+
+                    int cr = pixels >> (32 - shift);
+                    CR[index] = cr, CR[index + 1] = cr;
+                }
+
+                if (dx & 1) {
+                    int pixel = *((uint16_t *) rp);
+
+                    #if (OMV_HARDWARE_JPEG == 0)
+                    pixel ^= 0x8080;
+                    #endif
+
+                    Y0[index] = pixel;
+
+                    if (index % MCU_W) {
+                        if (shift == 8) {
+                            CR[index] = CR[index - 1];
+                            CB[index++] = pixel >> 8;
+                        } else {
+                            CB[index] = CB[index - 1];
+                            CR[index++] = pixel >> 8;
+                        }
+                    } else {
+                        if (shift == 8) {
+                            CB[index] = pixel >> 8;
+                            #if (OMV_HARDWARE_JPEG == 0)
+                            CR[index++] = 0;
+                            #else
+                            CR[index++] = 0x80;
+                            #endif
+                        } else {
+                            #if (OMV_HARDWARE_JPEG == 0)
+                            CB[index] = 0;
+                            #else
+                            CB[index] = 0x80;
+                            #endif
+                            CR[index++] = pixel >> 8;
+                        }
+                    }
+                }
+
+                index += MCU_W - dx;
+            }
+            break;
+        }
+        case PIXFORMAT_BAYER_ANY: {
+            if ((dx != MCU_W) || (dy != MCU_H)) { // partial MCU, fill with 0's to start
+                memset(Y0, 0, JPEG_444_GS_MCU_SIZE);
+                memset(CB, 0, JPEG_444_GS_MCU_SIZE);
+                memset(CR, 0, JPEG_444_GS_MCU_SIZE);
             }
 
             int src_w = src->w, w_limit = src_w - 1, w_limit_m_1 = w_limit - 1;
@@ -243,28 +315,116 @@ static void jpeg_get_mcu(image_t *src, int x_offset, int y_offset, int dx, int d
                         uint32_t row_grgr_2 = *((uint32_t *) (rowptr_grgr_2 + x));
                         uint32_t row_bgbg_3 = *((uint32_t *) (rowptr_bgbg_3 + x));
 
-                        #if defined(MCU_SERIES_F4) || defined(MCU_SERIES_F7) || defined(MCU_SERIES_H7)
-                        int row_01 = __UHADD8(row_grgr_0, row_grgr_2);
-                        int row_1g = __UHADD8(row_bgbg_1, __PKHTB(row_bgbg_1, row_bgbg_1, 16));
+                        int r_pixels_0, g_pixels_0, b_pixels_0;
 
-                        int r_pixels_0 = __UXTB16(__UHADD8(row_01, __PKHTB(row_01, row_01, 16)));
-                        int g_pixels_0 = __UXTB16(__UHADD8(row_1g, __PKHTB(row_1g, row_01, 8)));
-                        int b_pixels_0 = __UXTB16_RORn(__UHADD8(row_bgbg_1, __PKHBT(row_bgbg_1, row_bgbg_1, 16)), 8);
-                        #else
+                        switch (src->pixfmt) {
+                            case PIXFORMAT_BAYER_BGGR: {
+                                #if defined(ARM_MATH_DSP)
+                                int row_02 = __UHADD8(row_grgr_0, row_grgr_2);
+                                int row_1g = __UHADD8(row_bgbg_1, __PKHTB(row_bgbg_1, row_bgbg_1, 16));
 
-                        int r0 = ((row_grgr_0 & 0xFF) + (row_grgr_2 & 0xFF)) >> 1;
-                        int r2 = (((row_grgr_0 >> 16) & 0xFF) + ((row_grgr_2 >> 16) & 0xFF)) >> 1;
-                        int r_pixels_0 = (r2 << 16) | ((r0 + r2) >> 1);
+                                r_pixels_0 = __UXTB16(__UHADD8(row_02, __PKHTB(row_02, row_02, 16)));
+                                g_pixels_0 = __UXTB16(__UHADD8(row_1g, __PKHTB(row_1g, row_02, 8)));
+                                b_pixels_0 = __UXTB16_RORn(__UHADD8(row_bgbg_1, __PKHBT(row_bgbg_1, row_bgbg_1, 16)), 8);
+                                #else
 
-                        int g0 = (row_grgr_0 >> 8) & 0xFF;
-                        int g1 = (((row_bgbg_1 >> 16) & 0xFF) + (row_bgbg_1 & 0xFF)) >> 1;
-                        int g2 = (row_grgr_2 >> 8) & 0xFF;
-                        int g_pixels_0 = (row_bgbg_1 & 0xFF0000) | ((((g0 + g2) >> 1) + g1) >> 1);
+                                int r0 = ((row_grgr_0 & 0xFF) + (row_grgr_2 & 0xFF)) >> 1;
+                                int r2 = (((row_grgr_0 >> 16) & 0xFF) + ((row_grgr_2 >> 16) & 0xFF)) >> 1;
+                                r_pixels_0 = (r2 << 16) | ((r0 + r2) >> 1);
 
-                        int b1 = (((row_bgbg_1 >> 24) & 0xFF) + ((row_bgbg_1 >> 8) & 0xFF)) >> 1;
-                        int b_pixels_0 = (b1 << 16) | ((row_bgbg_1 >> 8) & 0xFF);
+                                int g0 = (row_grgr_0 >> 8) & 0xFF;
+                                int g1 = (((row_bgbg_1 >> 16) & 0xFF) + (row_bgbg_1 & 0xFF)) >> 1;
+                                int g2 = (row_grgr_2 >> 8) & 0xFF;
+                                g_pixels_0 = (row_bgbg_1 & 0xFF0000) | ((((g0 + g2) >> 1) + g1) >> 1);
 
-                        #endif
+                                int b1 = (((row_bgbg_1 >> 24) & 0xFF) + ((row_bgbg_1 >> 8) & 0xFF)) >> 1;
+                                b_pixels_0 = (b1 << 16) | ((row_bgbg_1 >> 8) & 0xFF);
+
+                                #endif
+                                break;
+                            }
+                            case PIXFORMAT_BAYER_GBRG: {
+                                #if defined(ARM_MATH_DSP)
+                                int row_02 = __UHADD8(row_grgr_0, row_grgr_2);
+                                int row_1g = __UHADD8(row_bgbg_1, __PKHBT(row_bgbg_1, row_bgbg_1, 16));
+
+                                r_pixels_0 = __UXTB16_RORn(__UHADD8(row_02, __PKHBT(row_02, row_02, 16)), 8);
+                                g_pixels_0 = __UXTB16_RORn(__UHADD8(row_1g, __PKHBT(row_1g, row_02, 8)), 8);
+                                b_pixels_0 = __UXTB16(__UHADD8(row_bgbg_1, __PKHTB(row_bgbg_1, row_bgbg_1, 16)));
+                                #else
+
+                                int r0 = (((row_grgr_0 >> 8) & 0xFF) + ((row_grgr_2 >> 8) & 0xFF)) >> 1;
+                                int r2 = (((row_grgr_0 >> 24) & 0xFF) + ((row_grgr_2 >> 24) & 0xFF)) >> 1;
+                                r_pixels_0 = r0 | (((r0 + r2) >> 1) << 16);
+
+                                int g0 = (row_grgr_0 >> 16) & 0xFF;
+                                int g1 = (((row_bgbg_1 >> 24) & 0xFF) + ((row_bgbg_1 >> 8) & 0xFF)) >> 1;
+                                int g2 = (row_grgr_2 >> 16) & 0xFF;
+                                g_pixels_0 = ((row_bgbg_1 >> 8) & 0xFF) | (((((g0 + g2) >> 1) + g1) >> 1) << 16);
+
+                                int b1 = (((row_bgbg_1 >> 16) & 0xFF) + (row_bgbg_1 & 0xFF)) >> 1;
+                                b_pixels_0 = b1 | (row_bgbg_1 & 0xFF0000);
+
+                                #endif
+                                break;
+                            }
+                            case PIXFORMAT_BAYER_GRBG: {
+                                #if defined(ARM_MATH_DSP)
+                                int row_02 = __UHADD8(row_grgr_0, row_grgr_2);
+                                int row_1g = __UHADD8(row_bgbg_1, __PKHBT(row_bgbg_1, row_bgbg_1, 16));
+
+                                r_pixels_0 = __UXTB16(__UHADD8(row_bgbg_1, __PKHTB(row_bgbg_1, row_bgbg_1, 16)));
+                                g_pixels_0 = __UXTB16_RORn(__UHADD8(row_1g, __PKHBT(row_1g, row_02, 8)), 8);
+                                b_pixels_0 = __UXTB16_RORn(__UHADD8(row_02, __PKHBT(row_02, row_02, 16)), 8);
+                                #else
+
+                                int r1 = (((row_bgbg_1 >> 16) & 0xFF) + (row_bgbg_1 & 0xFF)) >> 1;
+                                r_pixels_0 = r1 | (row_bgbg_1 & 0xFF0000);
+
+                                int g0 = (row_grgr_0 >> 16) & 0xFF;
+                                int g1 = (((row_bgbg_1 >> 24) & 0xFF) + ((row_bgbg_1 >> 8) & 0xFF)) >> 1;
+                                int g2 = (row_grgr_2 >> 16) & 0xFF;
+                                g_pixels_0 = ((row_bgbg_1 >> 8) & 0xFF) | (((((g0 + g2) >> 1) + g1) >> 1) << 16);
+
+                                int b0 = (((row_grgr_0 >> 8) & 0xFF) + ((row_grgr_2 >> 8) & 0xFF)) >> 1;
+                                int b2 = (((row_grgr_0 >> 24) & 0xFF) + ((row_grgr_2 >> 24) & 0xFF)) >> 1;
+                                b_pixels_0 = b0 | (((b0 + b2) >> 1) << 16);
+
+                                #endif
+                                break;
+                            }
+                            case PIXFORMAT_BAYER_RGGB: {
+                                #if defined(ARM_MATH_DSP)
+                                int row_02 = __UHADD8(row_grgr_0, row_grgr_2);
+                                int row_1g = __UHADD8(row_bgbg_1, __PKHTB(row_bgbg_1, row_bgbg_1, 16));
+
+                                r_pixels_0 = __UXTB16_RORn(__UHADD8(row_bgbg_1, __PKHBT(row_bgbg_1, row_bgbg_1, 16)), 8);
+                                g_pixels_0 = __UXTB16(__UHADD8(row_1g, __PKHTB(row_1g, row_02, 8)));
+                                b_pixels_0 = __UXTB16(__UHADD8(row_02, __PKHTB(row_02, row_02, 16)));
+                                #else
+
+                                int r1 = (((row_bgbg_1 >> 24) & 0xFF) + ((row_bgbg_1 >> 8) & 0xFF)) >> 1;
+                                r_pixels_0 = (r1 << 16) | ((row_bgbg_1 >> 8) & 0xFF);
+
+                                int g0 = (row_grgr_0 >> 8) & 0xFF;
+                                int g1 = (((row_bgbg_1 >> 16) & 0xFF) + (row_bgbg_1 & 0xFF)) >> 1;
+                                int g2 = (row_grgr_2 >> 8) & 0xFF;
+                                g_pixels_0 = (row_bgbg_1 & 0xFF0000) | ((((g0 + g2) >> 1) + g1) >> 1);
+
+                                int b0 = ((row_grgr_0 & 0xFF) + (row_grgr_2 & 0xFF)) >> 1;
+                                int b2 = (((row_grgr_0 >> 16) & 0xFF) + ((row_grgr_2 >> 16) & 0xFF)) >> 1;
+                                b_pixels_0 = (b2 << 16) | ((b0 + b2) >> 1);
+
+                                #endif
+                                break;
+                            }
+                            default: {
+                                r_pixels_0 = 0;
+                                g_pixels_0 = 0;
+                                b_pixels_0 = 0;
+                                break;
+                            }
+                        }
 
                         int y0 = ((r_pixels_0 * 38) + (g_pixels_0 * 75) + (b_pixels_0 * 15)) >> 7;
 
@@ -290,28 +450,116 @@ static void jpeg_get_mcu(image_t *src, int x_offset, int y_offset, int dx, int d
 
                         CR[index_e] = v0, CR[index_e + 1] = v0 >> 16;
 
-                        #if defined(MCU_SERIES_F4) || defined(MCU_SERIES_F7) || defined(MCU_SERIES_H7)
-                        int row_13 = __UHADD8(row_bgbg_1, row_bgbg_3);
-                        int row_2g = __UHADD8(row_grgr_2, __PKHBT(row_grgr_2, row_grgr_2, 16));
+                        int r_pixels_1, g_pixels_1, b_pixels_1;
 
-                        int r_pixels_1 = __UXTB16(__UHADD8(row_grgr_2, __PKHTB(row_grgr_2, row_grgr_2, 16)));
-                        int g_pixels_1 = __UXTB16_RORn(__UHADD8(row_2g, __PKHBT(row_2g, row_13, 8)), 8);
-                        int b_pixels_1 = __UXTB16_RORn(__UHADD8(row_13, __PKHBT(row_13, row_13, 16)), 8);
-                        #else
+                        switch (src->pixfmt) {
+                            case PIXFORMAT_BAYER_BGGR: {
+                                #if defined(ARM_MATH_DSP)
+                                int row_13 = __UHADD8(row_bgbg_1, row_bgbg_3);
+                                int row_2g = __UHADD8(row_grgr_2, __PKHBT(row_grgr_2, row_grgr_2, 16));
 
-                        r2 = (((row_grgr_2 >> 16) & 0xFF) + (row_grgr_2 & 0xFF)) >> 1;
-                        int r_pixels_1 = (row_grgr_2 & 0xFF0000) | r2;
+                                r_pixels_1 = __UXTB16(__UHADD8(row_grgr_2, __PKHTB(row_grgr_2, row_grgr_2, 16)));
+                                g_pixels_1 = __UXTB16_RORn(__UHADD8(row_2g, __PKHBT(row_2g, row_13, 8)), 8);
+                                b_pixels_1 = __UXTB16_RORn(__UHADD8(row_13, __PKHBT(row_13, row_13, 16)), 8);
+                                #else
 
-                        g1 = (row_bgbg_1 >> 16) & 0xFF;
-                        g2 = (((row_grgr_2 >> 24) & 0xFF) + ((row_grgr_2 >> 8) & 0xFF)) >> 1;
-                        int g3 = (row_bgbg_3 >> 16) & 0xFF;
-                        int g_pixels_1 = (((((g1 + g3) >> 1) + g2) >> 1) << 16) | ((row_grgr_2 >> 8) & 0xFF);
+                                int r2 = (((row_grgr_2 >> 16) & 0xFF) + (row_grgr_2 & 0xFF)) >> 1;
+                                r_pixels_1 = (row_grgr_2 & 0xFF0000) | r2;
 
-                        b1 = (((row_bgbg_1 >> 8) & 0xFF) + ((row_bgbg_3 >> 8) & 0xFF)) >> 1;
-                        int b3 = (((row_bgbg_1 >> 24) & 0xFF) + ((row_bgbg_3 >> 24) & 0xFF)) >> 1;
-                        int b_pixels_1 = (((b1 + b3) >> 1) << 16) | b1;
+                                int g1 = (row_bgbg_1 >> 16) & 0xFF;
+                                int g2 = (((row_grgr_2 >> 24) & 0xFF) + ((row_grgr_2 >> 8) & 0xFF)) >> 1;
+                                int g3 = (row_bgbg_3 >> 16) & 0xFF;
+                                g_pixels_1 = (((((g1 + g3) >> 1) + g2) >> 1) << 16) | ((row_grgr_2 >> 8) & 0xFF);
 
-                        #endif
+                                int b1 = (((row_bgbg_1 >> 8) & 0xFF) + ((row_bgbg_3 >> 8) & 0xFF)) >> 1;
+                                int b3 = (((row_bgbg_1 >> 24) & 0xFF) + ((row_bgbg_3 >> 24) & 0xFF)) >> 1;
+                                b_pixels_1 = (((b1 + b3) >> 1) << 16) | b1;
+
+                                #endif
+                                break;
+                            }
+                            case PIXFORMAT_BAYER_GBRG: {
+                                #if defined(ARM_MATH_DSP)
+                                int row_13 = __UHADD8(row_bgbg_1, row_bgbg_3);
+                                int row_2g = __UHADD8(row_grgr_2, __PKHTB(row_grgr_2, row_grgr_2, 16));
+
+                                r_pixels_1 = __UXTB16_RORn(__UHADD8(row_grgr_2, __PKHBT(row_grgr_2, row_grgr_2, 16)), 8);
+                                g_pixels_1 = __UXTB16(__UHADD8(row_2g, __PKHTB(row_2g, row_13, 8)));
+                                b_pixels_1 = __UXTB16(__UHADD8(row_13, __PKHTB(row_13, row_13, 16)));
+                                #else
+
+                                int r2 = (((row_grgr_2 >> 24) & 0xFF) + ((row_grgr_2 >> 8) & 0xFF)) >> 1;
+                                r_pixels_1 = ((row_grgr_2 >> 8) & 0xFF) | (r2 << 16);
+
+                                int g1 = (row_bgbg_1 >> 8) & 0xFF;
+                                int g2 = (((row_grgr_2 >> 16) & 0xFF) + (row_grgr_2 & 0xFF)) >> 1;
+                                int g3 = (row_bgbg_3 >> 8) & 0xFF;
+                                g_pixels_1 = ((((g1 + g3) >> 1) + g2) >> 1) | (row_grgr_2 & 0xFF0000);
+
+                                int b1 = ((row_bgbg_1 & 0xFF) + (row_bgbg_3 & 0xFF)) >> 1;
+                                int b3 = (((row_bgbg_1 >> 16) & 0xFF) + ((row_bgbg_3 >> 16) & 0xFF)) >> 1;
+                                b_pixels_1 = ((b1 + b3) >> 1) | (b3 << 16);
+
+                                #endif
+                                break;
+                            }
+                            case PIXFORMAT_BAYER_GRBG: {
+                                #if defined(ARM_MATH_DSP)
+                                int row_13 = __UHADD8(row_bgbg_1, row_bgbg_3);
+                                int row_2g = __UHADD8(row_grgr_2, __PKHTB(row_grgr_2, row_grgr_2, 16));
+
+                                r_pixels_1 = __UXTB16(__UHADD8(row_13, __PKHTB(row_13, row_13, 16)));
+                                g_pixels_1 = __UXTB16(__UHADD8(row_2g, __PKHTB(row_2g, row_13, 8)));
+                                b_pixels_1 = __UXTB16_RORn(__UHADD8(row_grgr_2, __PKHBT(row_grgr_2, row_grgr_2, 16)), 8);
+                                #else
+
+                                int r1 = ((row_bgbg_1 & 0xFF) + (row_bgbg_3 & 0xFF)) >> 1;
+                                int r3 = (((row_bgbg_1 >> 16) & 0xFF) + ((row_bgbg_3 >> 16) & 0xFF)) >> 1;
+                                r_pixels_1 = ((r1 + r3) >> 1) | (r3 << 16);
+
+                                int g1 = (row_bgbg_1 >> 8) & 0xFF;
+                                int g2 = (((row_grgr_2 >> 16) & 0xFF) + (row_grgr_2 & 0xFF)) >> 1;
+                                int g3 = (row_bgbg_3 >> 8) & 0xFF;
+                                g_pixels_1 = ((((g1 + g3) >> 1) + g2) >> 1) | (row_grgr_2 & 0xFF0000);
+
+                                int b2 = (((row_grgr_2 >> 24) & 0xFF) + ((row_grgr_2 >> 8) & 0xFF)) >> 1;
+                                b_pixels_1 = ((row_grgr_2 >> 8) & 0xFF) | (b2 << 16);
+
+                                #endif
+                                break;
+                            }
+                            case PIXFORMAT_BAYER_RGGB: {
+                                #if defined(ARM_MATH_DSP)
+                                int row_13 = __UHADD8(row_bgbg_1, row_bgbg_3);
+                                int row_2g = __UHADD8(row_grgr_2, __PKHBT(row_grgr_2, row_grgr_2, 16));
+
+                                r_pixels_1 = __UXTB16_RORn(__UHADD8(row_13, __PKHBT(row_13, row_13, 16)), 8);
+                                g_pixels_1 = __UXTB16_RORn(__UHADD8(row_2g, __PKHBT(row_2g, row_13, 8)), 8);
+                                b_pixels_1 = __UXTB16(__UHADD8(row_grgr_2, __PKHTB(row_grgr_2, row_grgr_2, 16)));
+                                #else
+
+                                int r1 = (((row_bgbg_1 >> 8) & 0xFF) + ((row_bgbg_3 >> 8) & 0xFF)) >> 1;
+                                int r3 = (((row_bgbg_1 >> 24) & 0xFF) + ((row_bgbg_3 >> 24) & 0xFF)) >> 1;
+                                r_pixels_1 = (((r1 + r3) >> 1) << 16) | r1;
+
+                                int g1 = (row_bgbg_1 >> 16) & 0xFF;
+                                int g2 = (((row_grgr_2 >> 24) & 0xFF) + ((row_grgr_2 >> 8) & 0xFF)) >> 1;
+                                int g3 = (row_bgbg_3 >> 16) & 0xFF;
+                                g_pixels_1 = (((((g1 + g3) >> 1) + g2) >> 1) << 16) | ((row_grgr_2 >> 8) & 0xFF);
+
+                                int b2 = (((row_grgr_2 >> 16) & 0xFF) + (row_grgr_2 & 0xFF)) >> 1;
+                                b_pixels_1 = (row_grgr_2 & 0xFF0000) | b2;
+
+                                #endif
+                                break;
+                            }
+                            default: {
+                                r_pixels_1 = 0;
+                                g_pixels_1 = 0;
+                                b_pixels_1 = 0;
+                                break;
+                            }
+                        }
 
                         int y1 = ((r_pixels_1 * 38) + (g_pixels_1 * 75) + (b_pixels_1 * 15)) >> 7;
 
@@ -430,28 +678,116 @@ static void jpeg_get_mcu(image_t *src, int x_offset, int y_offset, int dx, int d
                             row_bgbg_3 = *((uint32_t *) (rowptr_bgbg_3 + x - 1));
                         }
 
-                        #if defined(MCU_SERIES_F4) || defined(MCU_SERIES_F7) || defined(MCU_SERIES_H7)
-                        int row_01 = __UHADD8(row_grgr_0, row_grgr_2);
-                        int row_1g = __UHADD8(row_bgbg_1, __PKHTB(row_bgbg_1, row_bgbg_1, 16));
+                        int r_pixels_0, g_pixels_0, b_pixels_0;
 
-                        int r_pixels_0 = __UXTB16(__UHADD8(row_01, __PKHTB(row_01, row_01, 16)));
-                        int g_pixels_0 = __UXTB16(__UHADD8(row_1g, __PKHTB(row_1g, row_01, 8)));
-                        int b_pixels_0 = __UXTB16_RORn(__UHADD8(row_bgbg_1, __PKHBT(row_bgbg_1, row_bgbg_1, 16)), 8);
-                        #else
+                        switch (src->pixfmt) {
+                            case PIXFORMAT_BAYER_BGGR: {
+                                #if defined(ARM_MATH_DSP)
+                                int row_02 = __UHADD8(row_grgr_0, row_grgr_2);
+                                int row_1g = __UHADD8(row_bgbg_1, __PKHTB(row_bgbg_1, row_bgbg_1, 16));
 
-                        int r0 = ((row_grgr_0 & 0xFF) + (row_grgr_2 & 0xFF)) >> 1;
-                        int r2 = (((row_grgr_0 >> 16) & 0xFF) + ((row_grgr_2 >> 16) & 0xFF)) >> 1;
-                        int r_pixels_0 = (r2 << 16) | ((r0 + r2) >> 1);
+                                r_pixels_0 = __UXTB16(__UHADD8(row_02, __PKHTB(row_02, row_02, 16)));
+                                g_pixels_0 = __UXTB16(__UHADD8(row_1g, __PKHTB(row_1g, row_02, 8)));
+                                b_pixels_0 = __UXTB16_RORn(__UHADD8(row_bgbg_1, __PKHBT(row_bgbg_1, row_bgbg_1, 16)), 8);
+                                #else
 
-                        int g0 = (row_grgr_0 >> 8) & 0xFF;
-                        int g1 = (((row_bgbg_1 >> 16) & 0xFF) + (row_bgbg_1 & 0xFF)) >> 1;
-                        int g2 = (row_grgr_2 >> 8) & 0xFF;
-                        int g_pixels_0 = (row_bgbg_1 & 0xFF0000) | ((((g0 + g2) >> 1) + g1) >> 1);
+                                int r0 = ((row_grgr_0 & 0xFF) + (row_grgr_2 & 0xFF)) >> 1;
+                                int r2 = (((row_grgr_0 >> 16) & 0xFF) + ((row_grgr_2 >> 16) & 0xFF)) >> 1;
+                                r_pixels_0 = (r2 << 16) | ((r0 + r2) >> 1);
 
-                        int b1 = (((row_bgbg_1 >> 24) & 0xFF) + ((row_bgbg_1 >> 8) & 0xFF)) >> 1;
-                        int b_pixels_0 = (b1 << 16) | ((row_bgbg_1 >> 8) & 0xFF);
+                                int g0 = (row_grgr_0 >> 8) & 0xFF;
+                                int g1 = (((row_bgbg_1 >> 16) & 0xFF) + (row_bgbg_1 & 0xFF)) >> 1;
+                                int g2 = (row_grgr_2 >> 8) & 0xFF;
+                                g_pixels_0 = (row_bgbg_1 & 0xFF0000) | ((((g0 + g2) >> 1) + g1) >> 1);
 
-                        #endif
+                                int b1 = (((row_bgbg_1 >> 24) & 0xFF) + ((row_bgbg_1 >> 8) & 0xFF)) >> 1;
+                                b_pixels_0 = (b1 << 16) | ((row_bgbg_1 >> 8) & 0xFF);
+
+                                #endif
+                                break;
+                            }
+                            case PIXFORMAT_BAYER_GBRG: {
+                                #if defined(ARM_MATH_DSP)
+                                int row_02 = __UHADD8(row_grgr_0, row_grgr_2);
+                                int row_1g = __UHADD8(row_bgbg_1, __PKHBT(row_bgbg_1, row_bgbg_1, 16));
+
+                                r_pixels_0 = __UXTB16_RORn(__UHADD8(row_02, __PKHBT(row_02, row_02, 16)), 8);
+                                g_pixels_0 = __UXTB16_RORn(__UHADD8(row_1g, __PKHBT(row_1g, row_02, 8)), 8);
+                                b_pixels_0 = __UXTB16(__UHADD8(row_bgbg_1, __PKHTB(row_bgbg_1, row_bgbg_1, 16)));
+                                #else
+
+                                int r0 = (((row_grgr_0 >> 8) & 0xFF) + ((row_grgr_2 >> 8) & 0xFF)) >> 1;
+                                int r2 = (((row_grgr_0 >> 24) & 0xFF) + ((row_grgr_2 >> 24) & 0xFF)) >> 1;
+                                r_pixels_0 = r0 | (((r0 + r2) >> 1) << 16);
+
+                                int g0 = (row_grgr_0 >> 16) & 0xFF;
+                                int g1 = (((row_bgbg_1 >> 24) & 0xFF) + ((row_bgbg_1 >> 8) & 0xFF)) >> 1;
+                                int g2 = (row_grgr_2 >> 16) & 0xFF;
+                                g_pixels_0 = ((row_bgbg_1 >> 8) & 0xFF) | (((((g0 + g2) >> 1) + g1) >> 1) << 16);
+
+                                int b1 = (((row_bgbg_1 >> 16) & 0xFF) + (row_bgbg_1 & 0xFF)) >> 1;
+                                b_pixels_0 = b1 | (row_bgbg_1 & 0xFF0000);
+
+                                #endif
+                                break;
+                            }
+                            case PIXFORMAT_BAYER_GRBG: {
+                                #if defined(ARM_MATH_DSP)
+                                int row_02 = __UHADD8(row_grgr_0, row_grgr_2);
+                                int row_1g = __UHADD8(row_bgbg_1, __PKHBT(row_bgbg_1, row_bgbg_1, 16));
+
+                                r_pixels_0 = __UXTB16(__UHADD8(row_bgbg_1, __PKHTB(row_bgbg_1, row_bgbg_1, 16)));
+                                g_pixels_0 = __UXTB16_RORn(__UHADD8(row_1g, __PKHBT(row_1g, row_02, 8)), 8);
+                                b_pixels_0 = __UXTB16_RORn(__UHADD8(row_02, __PKHBT(row_02, row_02, 16)), 8);
+                                #else
+
+                                int r1 = (((row_bgbg_1 >> 16) & 0xFF) + (row_bgbg_1 & 0xFF)) >> 1;
+                                r_pixels_0 = r1 | (row_bgbg_1 & 0xFF0000);
+
+                                int g0 = (row_grgr_0 >> 16) & 0xFF;
+                                int g1 = (((row_bgbg_1 >> 24) & 0xFF) + ((row_bgbg_1 >> 8) & 0xFF)) >> 1;
+                                int g2 = (row_grgr_2 >> 16) & 0xFF;
+                                g_pixels_0 = ((row_bgbg_1 >> 8) & 0xFF) | (((((g0 + g2) >> 1) + g1) >> 1) << 16);
+
+                                int b0 = (((row_grgr_0 >> 8) & 0xFF) + ((row_grgr_2 >> 8) & 0xFF)) >> 1;
+                                int b2 = (((row_grgr_0 >> 24) & 0xFF) + ((row_grgr_2 >> 24) & 0xFF)) >> 1;
+                                b_pixels_0 = b0 | (((b0 + b2) >> 1) << 16);
+
+                                #endif
+                                break;
+                            }
+                            case PIXFORMAT_BAYER_RGGB: {
+                                #if defined(ARM_MATH_DSP)
+                                int row_02 = __UHADD8(row_grgr_0, row_grgr_2);
+                                int row_1g = __UHADD8(row_bgbg_1, __PKHTB(row_bgbg_1, row_bgbg_1, 16));
+
+                                r_pixels_0 = __UXTB16_RORn(__UHADD8(row_bgbg_1, __PKHBT(row_bgbg_1, row_bgbg_1, 16)), 8);
+                                g_pixels_0 = __UXTB16(__UHADD8(row_1g, __PKHTB(row_1g, row_02, 8)));
+                                b_pixels_0 = __UXTB16(__UHADD8(row_02, __PKHTB(row_02, row_02, 16)));
+                                #else
+
+                                int r1 = (((row_bgbg_1 >> 24) & 0xFF) + ((row_bgbg_1 >> 8) & 0xFF)) >> 1;
+                                r_pixels_0 = (r1 << 16) | ((row_bgbg_1 >> 8) & 0xFF);
+
+                                int g0 = (row_grgr_0 >> 8) & 0xFF;
+                                int g1 = (((row_bgbg_1 >> 16) & 0xFF) + (row_bgbg_1 & 0xFF)) >> 1;
+                                int g2 = (row_grgr_2 >> 8) & 0xFF;
+                                g_pixels_0 = (row_bgbg_1 & 0xFF0000) | ((((g0 + g2) >> 1) + g1) >> 1);
+
+                                int b0 = ((row_grgr_0 & 0xFF) + (row_grgr_2 & 0xFF)) >> 1;
+                                int b2 = (((row_grgr_0 >> 16) & 0xFF) + ((row_grgr_2 >> 16) & 0xFF)) >> 1;
+                                b_pixels_0 = (b2 << 16) | ((b0 + b2) >> 1);
+
+                                #endif
+                                break;
+                            }
+                            default: {
+                                r_pixels_0 = 0;
+                                g_pixels_0 = 0;
+                                b_pixels_0 = 0;
+                                break;
+                            }
+                        }
 
                         int y0 = ((r_pixels_0 * 38) + (g_pixels_0 * 75) + (b_pixels_0 * 15)) >> 7;
 
@@ -477,28 +813,116 @@ static void jpeg_get_mcu(image_t *src, int x_offset, int y_offset, int dx, int d
 
                         CR[index_e] = v0, CR[index_e + 1] = v0 >> 16;
 
-                        #if defined(MCU_SERIES_F4) || defined(MCU_SERIES_F7) || defined(MCU_SERIES_H7)
-                        int row_13 = __UHADD8(row_bgbg_1, row_bgbg_3);
-                        int row_2g = __UHADD8(row_grgr_2, __PKHBT(row_grgr_2, row_grgr_2, 16));
+                        int r_pixels_1, g_pixels_1, b_pixels_1;
 
-                        int r_pixels_1 = __UXTB16(__UHADD8(row_grgr_2, __PKHTB(row_grgr_2, row_grgr_2, 16)));
-                        int g_pixels_1 = __UXTB16_RORn(__UHADD8(row_2g, __PKHBT(row_2g, row_13, 8)), 8);
-                        int b_pixels_1 = __UXTB16_RORn(__UHADD8(row_13, __PKHBT(row_13, row_13, 16)), 8);
-                        #else
+                        switch (src->pixfmt) {
+                            case PIXFORMAT_BAYER_BGGR: {
+                                #if defined(ARM_MATH_DSP)
+                                int row_13 = __UHADD8(row_bgbg_1, row_bgbg_3);
+                                int row_2g = __UHADD8(row_grgr_2, __PKHBT(row_grgr_2, row_grgr_2, 16));
 
-                        r2 = (((row_grgr_2 >> 16) & 0xFF) + (row_grgr_2 & 0xFF)) >> 1;
-                        int r_pixels_1 = (row_grgr_2 & 0xFF0000) | r2;
+                                r_pixels_1 = __UXTB16(__UHADD8(row_grgr_2, __PKHTB(row_grgr_2, row_grgr_2, 16)));
+                                g_pixels_1 = __UXTB16_RORn(__UHADD8(row_2g, __PKHBT(row_2g, row_13, 8)), 8);
+                                b_pixels_1 = __UXTB16_RORn(__UHADD8(row_13, __PKHBT(row_13, row_13, 16)), 8);
+                                #else
 
-                        g1 = (row_bgbg_1 >> 16) & 0xFF;
-                        g2 = (((row_grgr_2 >> 24) & 0xFF) + ((row_grgr_2 >> 8) & 0xFF)) >> 1;
-                        int g3 = (row_bgbg_3 >> 16) & 0xFF;
-                        int g_pixels_1 = (((((g1 + g3) >> 1) + g2) >> 1) << 16) | ((row_grgr_2 >> 8) & 0xFF);
+                                int r2 = (((row_grgr_2 >> 16) & 0xFF) + (row_grgr_2 & 0xFF)) >> 1;
+                                r_pixels_1 = (row_grgr_2 & 0xFF0000) | r2;
 
-                        b1 = (((row_bgbg_1 >> 8) & 0xFF) + ((row_bgbg_3 >> 8) & 0xFF)) >> 1;
-                        int b3 = (((row_bgbg_1 >> 24) & 0xFF) + ((row_bgbg_3 >> 24) & 0xFF)) >> 1;
-                        int b_pixels_1 = (((b1 + b3) >> 1) << 16) | b1;
+                                int g1 = (row_bgbg_1 >> 16) & 0xFF;
+                                int g2 = (((row_grgr_2 >> 24) & 0xFF) + ((row_grgr_2 >> 8) & 0xFF)) >> 1;
+                                int g3 = (row_bgbg_3 >> 16) & 0xFF;
+                                g_pixels_1 = (((((g1 + g3) >> 1) + g2) >> 1) << 16) | ((row_grgr_2 >> 8) & 0xFF);
 
-                        #endif
+                                int b1 = (((row_bgbg_1 >> 8) & 0xFF) + ((row_bgbg_3 >> 8) & 0xFF)) >> 1;
+                                int b3 = (((row_bgbg_1 >> 24) & 0xFF) + ((row_bgbg_3 >> 24) & 0xFF)) >> 1;
+                                b_pixels_1 = (((b1 + b3) >> 1) << 16) | b1;
+
+                                #endif
+                                break;
+                            }
+                            case PIXFORMAT_BAYER_GBRG: {
+                                #if defined(ARM_MATH_DSP)
+                                int row_13 = __UHADD8(row_bgbg_1, row_bgbg_3);
+                                int row_2g = __UHADD8(row_grgr_2, __PKHTB(row_grgr_2, row_grgr_2, 16));
+
+                                r_pixels_1 = __UXTB16_RORn(__UHADD8(row_grgr_2, __PKHBT(row_grgr_2, row_grgr_2, 16)), 8);
+                                g_pixels_1 = __UXTB16(__UHADD8(row_2g, __PKHTB(row_2g, row_13, 8)));
+                                b_pixels_1 = __UXTB16(__UHADD8(row_13, __PKHTB(row_13, row_13, 16)));
+                                #else
+
+                                int r2 = (((row_grgr_2 >> 24) & 0xFF) + ((row_grgr_2 >> 8) & 0xFF)) >> 1;
+                                r_pixels_1 = ((row_grgr_2 >> 8) & 0xFF) | (r2 << 16);
+
+                                int g1 = (row_bgbg_1 >> 8) & 0xFF;
+                                int g2 = (((row_grgr_2 >> 16) & 0xFF) + (row_grgr_2 & 0xFF)) >> 1;
+                                int g3 = (row_bgbg_3 >> 8) & 0xFF;
+                                g_pixels_1 = ((((g1 + g3) >> 1) + g2) >> 1) | (row_grgr_2 & 0xFF0000);
+
+                                int b1 = ((row_bgbg_1 & 0xFF) + (row_bgbg_3 & 0xFF)) >> 1;
+                                int b3 = (((row_bgbg_1 >> 16) & 0xFF) + ((row_bgbg_3 >> 16) & 0xFF)) >> 1;
+                                b_pixels_1 = ((b1 + b3) >> 1) | (b3 << 16);
+
+                                #endif
+                                break;
+                            }
+                            case PIXFORMAT_BAYER_GRBG: {
+                                #if defined(ARM_MATH_DSP)
+                                int row_13 = __UHADD8(row_bgbg_1, row_bgbg_3);
+                                int row_2g = __UHADD8(row_grgr_2, __PKHTB(row_grgr_2, row_grgr_2, 16));
+
+                                r_pixels_1 = __UXTB16(__UHADD8(row_13, __PKHTB(row_13, row_13, 16)));
+                                g_pixels_1 = __UXTB16(__UHADD8(row_2g, __PKHTB(row_2g, row_13, 8)));
+                                b_pixels_1 = __UXTB16_RORn(__UHADD8(row_grgr_2, __PKHBT(row_grgr_2, row_grgr_2, 16)), 8);
+                                #else
+
+                                int r1 = ((row_bgbg_1 & 0xFF) + (row_bgbg_3 & 0xFF)) >> 1;
+                                int r3 = (((row_bgbg_1 >> 16) & 0xFF) + ((row_bgbg_3 >> 16) & 0xFF)) >> 1;
+                                r_pixels_1 = ((r1 + r3) >> 1) | (r3 << 16);
+
+                                int g1 = (row_bgbg_1 >> 8) & 0xFF;
+                                int g2 = (((row_grgr_2 >> 16) & 0xFF) + (row_grgr_2 & 0xFF)) >> 1;
+                                int g3 = (row_bgbg_3 >> 8) & 0xFF;
+                                g_pixels_1 = ((((g1 + g3) >> 1) + g2) >> 1) | (row_grgr_2 & 0xFF0000);
+
+                                int b2 = (((row_grgr_2 >> 24) & 0xFF) + ((row_grgr_2 >> 8) & 0xFF)) >> 1;
+                                b_pixels_1 = ((row_grgr_2 >> 8) & 0xFF) | (b2 << 16);
+
+                                #endif
+                                break;
+                            }
+                            case PIXFORMAT_BAYER_RGGB: {
+                                #if defined(ARM_MATH_DSP)
+                                int row_13 = __UHADD8(row_bgbg_1, row_bgbg_3);
+                                int row_2g = __UHADD8(row_grgr_2, __PKHBT(row_grgr_2, row_grgr_2, 16));
+
+                                r_pixels_1 = __UXTB16_RORn(__UHADD8(row_13, __PKHBT(row_13, row_13, 16)), 8);
+                                g_pixels_1 = __UXTB16_RORn(__UHADD8(row_2g, __PKHBT(row_2g, row_13, 8)), 8);
+                                b_pixels_1 = __UXTB16(__UHADD8(row_grgr_2, __PKHTB(row_grgr_2, row_grgr_2, 16)));
+                                #else
+
+                                int r1 = (((row_bgbg_1 >> 8) & 0xFF) + ((row_bgbg_3 >> 8) & 0xFF)) >> 1;
+                                int r3 = (((row_bgbg_1 >> 24) & 0xFF) + ((row_bgbg_3 >> 24) & 0xFF)) >> 1;
+                                r_pixels_1 = (((r1 + r3) >> 1) << 16) | r1;
+
+                                int g1 = (row_bgbg_1 >> 16) & 0xFF;
+                                int g2 = (((row_grgr_2 >> 24) & 0xFF) + ((row_grgr_2 >> 8) & 0xFF)) >> 1;
+                                int g3 = (row_bgbg_3 >> 16) & 0xFF;
+                                g_pixels_1 = (((((g1 + g3) >> 1) + g2) >> 1) << 16) | ((row_grgr_2 >> 8) & 0xFF);
+
+                                int b2 = (((row_grgr_2 >> 16) & 0xFF) + (row_grgr_2 & 0xFF)) >> 1;
+                                b_pixels_1 = (row_grgr_2 & 0xFF0000) | b2;
+
+                                #endif
+                                break;
+                            }
+                            default: {
+                                r_pixels_1 = 0;
+                                g_pixels_1 = 0;
+                                b_pixels_1 = 0;
+                                break;
+                            }
+                        }
 
                         int y1 = ((r_pixels_1 * 38) + (g_pixels_1 * 75) + (b_pixels_1 * 15)) >> 7;
 
@@ -626,15 +1050,16 @@ bool jpeg_compress(image_t *src, image_t *dst, int quality, bool realloc)
     JPEG_Info.ImageHeight   = src->h;
     JPEG_Info.ImageQuality  = quality;
 
-    switch (src->bpp) {
-        case IMAGE_BPP_BINARY:
-        case IMAGE_BPP_GRAYSCALE:
+    switch (src->pixfmt) {
+        case PIXFORMAT_BINARY:
+        case PIXFORMAT_GRAYSCALE:
             mcu_size                    = JPEG_444_GS_MCU_SIZE;
             JPEG_Info.ColorSpace        = JPEG_GRAYSCALE_COLORSPACE;
             JPEG_Info.ChromaSubsampling = JPEG_444_SUBSAMPLING;
             break;
-        case IMAGE_BPP_RGB565:
-        case IMAGE_BPP_BAYER:
+        case PIXFORMAT_RGB565:
+        case PIXFORMAT_BAYER_ANY:
+        case PIXFORMAT_YUV_ANY:
             mcu_size                    = JPEG_444_YCBCR_MCU_SIZE;
             JPEG_Info.ColorSpace        = JPEG_YCBCR_COLORSPACE;
             JPEG_Info.ChromaSubsampling = JPEG_444_SUBSAMPLING;
@@ -660,8 +1085,8 @@ bool jpeg_compress(image_t *src, image_t *dst, int quality, bool realloc)
             fb_alloc_fail();
         }
 
-        dst->bpp = avail - space;
-        dst->data = fb_alloc(dst->bpp, FB_ALLOC_PREFER_SIZE | FB_ALLOC_CACHE_ALIGN);
+        dst->size = IMLIB_IMAGE_MAX_SIZE(avail - space);
+        dst->data = fb_alloc(dst->size, FB_ALLOC_PREFER_SIZE | FB_ALLOC_CACHE_ALIGN);
     }
 
     // Compute size of the APP0 header with cache alignment padding.
@@ -670,20 +1095,20 @@ bool jpeg_compress(image_t *src, image_t *dst, int quality, bool realloc)
     int app0_padding_size = app0_unalign_size ? (__SCB_DCACHE_LINE_SIZE - app0_unalign_size) : 0;
     int app0_total_size = app0_size + app0_padding_size;
 
-    if (dst->bpp < app0_total_size) {
+    if (dst->size < app0_total_size) {
         return true; // overflow
     }
 
     // Adjust JPEG size and address by app0 header size.
-    dst->bpp -= app0_total_size;
+    dst->size -= app0_total_size;
     uint8_t *dma_buffer = dst->data + app0_total_size;
 
     // Destination is too small.
-    if (dst->bpp < (OUTPUT_CHUNK_SIZE * 2)) {
+    if (dst->size < (OUTPUT_CHUNK_SIZE * 2)) {
         return true; // overflow
     }
 
-    JPEG_out_data_length_max = dst->bpp;
+    JPEG_out_data_length_max = dst->size;
     JPEG_out_data_length = 0;
     JPEG_input_paused = false;
     JPEG_output_paused = false;
@@ -760,7 +1185,7 @@ bool jpeg_compress(image_t *src, image_t *dst, int quality, bool realloc)
     fb_free(); // mcu_row_buffer
 
     // Set output size.
-    dst->bpp = JPEG_out_data_length;
+    dst->size = JPEG_out_data_length;
 
     // STM32H7 BUG FIX! The JPEG Encoder will ocassionally trigger the EOCF interrupt before writing
     // a final 0x000000D9 long into the output fifo as the end of the JPEG image. When this occurs
@@ -768,13 +1193,12 @@ bool jpeg_compress(image_t *src, image_t *dst, int quality, bool realloc)
     if (__HAL_JPEG_GET_FLAG(&JPEG_Handle, JPEG_FLAG_OFNEF) && (!JPEG_Handle.Instance->DOR)) {
         // The encoding output process always aborts before writing OUTPUT_CHUNK_SIZE bytes
         // to the end of the dma_buffer. So, it is always safe to add one extra byte.
-        dma_buffer[dst->bpp] = 0xD9;
-        dst->bpp += sizeof(uint8_t);
+        dma_buffer[dst->size++] = 0xD9;
     }
 
     // Update the JPEG image size by the new APP0 header and it's padding. However, we have to move
     // the SOI header to the front of the image first...
-    dst->bpp += app0_total_size;
+    dst->size += app0_total_size;
     memcpy(dst->data, dma_buffer, sizeof(uint16_t)); // move SOI
     memcpy(dst->data + sizeof(uint16_t), JPEG_APP0, sizeof(JPEG_APP0)); // inject APP0
 
@@ -783,7 +1207,7 @@ bool jpeg_compress(image_t *src, image_t *dst, int quality, bool realloc)
     memset(dst->data + sizeof(uint32_t) + sizeof(JPEG_APP0), 0, app0_padding_size - sizeof(uint16_t)); // data
 
     // Clean trailing data after 0xFFD9 at the end of the jpeg byte stream.
-    dst->bpp = jpeg_clean_trailing_bytes(dst->bpp, dst->data);
+    dst->size = jpeg_clean_trailing_bytes(dst->size, dst->data);
 
 #if (TIME_JPEG==1)
     printf("time: %u ms\n", mp_hal_ticks_ms() - start);
@@ -1010,6 +1434,55 @@ static const uint16_t UVAC_HT[256][2] = {
     {0xFFFC, 0x0010},{0xFFFD, 0x0010},{0xFFFE, 0x0010},{0x0000, 0x0000},{0x0000, 0x0000},{0x0000, 0x0000},{0x0000, 0x0000},{0x0000, 0x0000},
 };
 
+// Macro to write variable length codes to the output stream more efficiently
+#define STORECODE(pOut, iLen, ulCode, ulAcc, iNewLen) \
+        if (iLen+iNewLen > 32) { while (iLen >= 8) \
+                        {unsigned char c = (unsigned char)(ulAcc >> 24); *pOut++ = c; \
+        if (c == 0xff) { *pOut++ = 0;} ulAcc <<= 8; iLen -= 8; }} \
+        iLen += iNewLen; ulAcc |= (ulCode << (32-iLen));
+
+//
+// See if we're close to filling up the output buffer
+// If so, allocate more space now so that we don't have
+// to check on every byte written
+//
+// If we're out of space and the realloc option is not available
+// return true to indicate that encoding has to halt
+//
+static int jpeg_check_highwater(jpeg_buf_t *jpeg_buf)
+{
+    if ((jpeg_buf->idx+1) >= jpeg_buf->length - 256) {
+        if (jpeg_buf->realloc == false) {
+            // Can't realloc buffer
+            jpeg_buf->overflow = true;
+            return 1; // failure
+        }
+        jpeg_buf->length += 1024;
+        jpeg_buf->buf = xrealloc(jpeg_buf->buf, jpeg_buf->length);
+    }
+    return 0; // ok
+} /* jpeg_check_highwater() */
+
+//
+// Restore buffer pointer variables from local copies
+//
+void jpeg_restore_buf(jpeg_buf_t *jpeg_buf, uint8_t *pOut, int iBitCount, uint32_t ulBits)
+{
+    uint8_t c;
+    while (iBitCount >= 8) {
+        c = (uint8_t)(ulBits >> 24);
+        *pOut++ = c;
+        if (c == 0xff) {
+            *pOut++ = 0;
+        }
+        ulBits <<= 8; iBitCount -= 8;
+    }
+    jpeg_buf->idx = (int)(pOut - jpeg_buf->buf);
+    jpeg_buf->bitb = ulBits >> 8;
+    jpeg_buf->bitc = iBitCount;
+
+} /* jpeg_restore_buf() */
+
 static void jpeg_put_char(jpeg_buf_t *jpeg_buf, char c)
 {
     if ((jpeg_buf->idx+1) >= jpeg_buf->length) {
@@ -1173,20 +1646,31 @@ static int jpeg_processDU(jpeg_buf_t *jpeg_buf, int8_t *CDU, float *fdtbl, int D
         }
     }
 
+    if (jpeg_check_highwater(jpeg_buf)) // check if we're getting close to the end of the buffer
+       return 0; // stop encoding, we've run out of space
+    // Use local vars to speed up buffer access
+    // and a macro (STORECODE) to manipulate the local vars
+    uint8_t *pOut, iBitCount; // output pointer and bit count
+    uint32_t ulBits; // accumulated bits
+    pOut = &jpeg_buf->buf[jpeg_buf->idx];
+    iBitCount = jpeg_buf->bitc; // current stored bits
+    ulBits = (jpeg_buf->bitb << 8); // bit pattern shifted up to bit 31
+
     // Encode DC
     int diff = DUQ[0] - DC;
     if (diff == 0) {
-        jpeg_writeBits(jpeg_buf, HTDC[0]);
+        STORECODE(pOut, iBitCount, HTDC[0][0], ulBits, HTDC[0][1])
     } else {
         uint16_t bits[2];
         jpeg_calcBits(diff, bits);
-        jpeg_writeBits(jpeg_buf, HTDC[bits[1]]);
-        jpeg_writeBits(jpeg_buf, bits);
+        STORECODE(pOut, iBitCount, HTDC[bits[1]][0], ulBits, HTDC[bits[1]][1])
+        STORECODE(pOut, iBitCount, bits[0], ulBits, bits[1])
     }
 
     // Encode ACs
     if(end0pos == 0) {
-        jpeg_writeBits(jpeg_buf, EOB);
+        STORECODE(pOut, iBitCount, EOB[0], ulBits, EOB[1])
+        jpeg_restore_buf(jpeg_buf, pOut, iBitCount, ulBits);
         return DUQ[0];
     }
 
@@ -1197,18 +1681,20 @@ static int jpeg_processDU(jpeg_buf_t *jpeg_buf, int8_t *CDU, float *fdtbl, int D
         int nrzeroes = i-startpos;
         if ( nrzeroes >= 16 ) {
             int lng = nrzeroes>>4;
-            for (int nrmarker=1; nrmarker <= lng; ++nrmarker)
-                jpeg_writeBits(jpeg_buf, M16zeroes);
+            for (int nrmarker=1; nrmarker <= lng; ++nrmarker) {
+                STORECODE(pOut, iBitCount, M16zeroes[0], ulBits, M16zeroes[1])
+            } // for
             nrzeroes &= 15;
         }
         uint16_t bits[2];
         jpeg_calcBits(DUQ[i], bits);
-        jpeg_writeBits(jpeg_buf, HTAC[(nrzeroes<<4)+bits[1]]);
-        jpeg_writeBits(jpeg_buf, bits);
+        STORECODE(pOut, iBitCount, HTAC[(nrzeroes<<4)+bits[1]][0], ulBits, HTAC[(nrzeroes<<4)+bits[1]][1])
+        STORECODE(pOut, iBitCount, bits[0], ulBits, bits[1])
     }
     if(end0pos != 63) {
-        jpeg_writeBits(jpeg_buf, EOB);
+        STORECODE(pOut, iBitCount, EOB[0], ulBits, EOB[1])
     }
+    jpeg_restore_buf(jpeg_buf, pOut, iBitCount, ulBits);
     return DUQ[0];
 }
 
@@ -1349,14 +1835,16 @@ bool jpeg_compress(image_t *src, image_t *dst, int quality, bool realloc)
     #endif
 
     if (!dst->data) {
-        dst->data = fb_alloc_all((uint32_t *) &dst->bpp, FB_ALLOC_PREFER_SIZE | FB_ALLOC_CACHE_ALIGN);
+        uint32_t size=0;
+        dst->data = fb_alloc_all(&size, FB_ALLOC_PREFER_SIZE | FB_ALLOC_CACHE_ALIGN);
+        dst->size = IMLIB_IMAGE_MAX_SIZE(size);
     }
 
     // JPEG buffer
     jpeg_buf_t jpeg_buf = {
         .idx = 0,
         .buf = dst->pixels,
-        .length = dst->bpp,
+        .length = dst->size,
         .bitc = 0,
         .bitb = 0,
         .realloc = realloc,
@@ -1366,10 +1854,9 @@ bool jpeg_compress(image_t *src, image_t *dst, int quality, bool realloc)
     // Initialize quantization tables
     jpeg_init(quality);
 
-    bool is_color = (src->bpp == IMAGE_BPP_RGB565) || (src->bpp == IMAGE_BPP_BAYER);
     jpeg_subsample_t jpeg_subsample = JPEG_SUBSAMPLE_1x1;
 
-    if (is_color) {
+    if (src->is_color) {
         if (quality <= 35) {
             jpeg_subsample = JPEG_SUBSAMPLE_2x2;
         } else if (quality < 60) {
@@ -1377,7 +1864,7 @@ bool jpeg_compress(image_t *src, image_t *dst, int quality, bool realloc)
         }
     }
 
-    jpeg_write_headers(&jpeg_buf, src->w, src->h, is_color ? 2 : 1, jpeg_subsample);
+    jpeg_write_headers(&jpeg_buf, src->w, src->h, src->is_color ? 2 : 1, jpeg_subsample);
 
     int DCY = 0, DCU = 0, DCV = 0;
 
@@ -1402,7 +1889,7 @@ bool jpeg_compress(image_t *src, image_t *dst, int quality, bool realloc)
                     jpeg_get_mcu(src, x_offset, y_offset, dx, dy, YDU, UDU, VDU);
                     DCY = jpeg_processDU(&jpeg_buf, YDU, fdtbl_Y, DCY, YDC_HT, YAC_HT);
 
-                    if (is_color) {
+                    if (src->is_color) {
                         DCU = jpeg_processDU(&jpeg_buf, UDU, fdtbl_UV, DCU, UVDC_HT, UVAC_HT);
                         DCV = jpeg_processDU(&jpeg_buf, VDU, fdtbl_UV, DCV, UVDC_HT, UVAC_HT);
                     }
@@ -1568,7 +2055,7 @@ bool jpeg_compress(image_t *src, image_t *dst, int quality, bool realloc)
     jpeg_put_char(&jpeg_buf, 0xFF);
     jpeg_put_char(&jpeg_buf, 0xD9);
 
-    dst->bpp = jpeg_buf.idx;
+    dst->size = jpeg_buf.idx;
     dst->data = jpeg_buf.buf;
 
     #if (TIME_JPEG==1)
@@ -1580,13 +2067,13 @@ bool jpeg_compress(image_t *src, image_t *dst, int quality, bool realloc)
 
 #endif // (OMV_HARDWARE_JPEG == 1)
 
-int jpeg_clean_trailing_bytes(int bpp, uint8_t *data)
+int jpeg_clean_trailing_bytes(int size, uint8_t *data)
 {
-    while ((bpp > 1) && ((data[bpp-2] != 0xFF) || (data[bpp-1] != 0xD9))) {
-        bpp -= 1;
+    while ((size > 1) && ((data[size-2] != 0xFF) || (data[size-1] != 0xD9))) {
+        size -= 1;
     }
 
-    return bpp;
+    return size;
 }
 
 #if defined(IMLIB_ENABLE_IMAGE_FILE_IO)
@@ -1616,12 +2103,19 @@ void jpeg_read_geometry(FIL *fp, image_t *img, const char *path, jpg_read_settin
                 uint16_t width;
                 read_word(fp, &width);
                 width = __REV16(width);
+
                 uint16_t height;
                 read_word(fp, &height);
                 height = __REV16(height);
-                rs->jpg_w = img->w = width;
-                rs->jpg_h = img->h = height;
-                rs->jpg_size = img->bpp = f_size(fp);
+
+                rs->jpg_w   = width;
+                rs->jpg_h   = height;
+                rs->jpg_size = IMLIB_IMAGE_MAX_SIZE(f_size(fp));
+
+                img->w      = rs->jpg_w;
+                img->h      = rs->jpg_h;
+                img->size   = rs->jpg_size;
+                img->pixfmt = PIXFORMAT_JPEG;
                 return;
             } else {
                 file_seek(fp, f_tell(fp) + size - 2);
@@ -1636,7 +2130,7 @@ void jpeg_read_geometry(FIL *fp, image_t *img, const char *path, jpg_read_settin
 void jpeg_read_pixels(FIL *fp, image_t *img)
 {
     file_seek(fp, 0);
-    read_data(fp, img->pixels, img->bpp);
+    read_data(fp, img->pixels, img->size);
 }
 
 void jpeg_read(image_t *img, const char *path)
@@ -1650,7 +2144,7 @@ void jpeg_read(image_t *img, const char *path)
     jpeg_read_geometry(&fp, img, path, &rs);
 
     if (!img->pixels) {
-        img->pixels = xalloc(img->bpp);
+        img->pixels = xalloc(img->size);
     }
 
     jpeg_read_pixels(&fp, img);
@@ -1662,14 +2156,14 @@ void jpeg_write(image_t *img, const char *path, int quality)
     FIL fp;
     file_write_open(&fp, path);
     if (IM_IS_JPEG(img)) {
-        write_data(&fp, img->pixels, img->bpp);
+        write_data(&fp, img->pixels, img->size);
     } else {
-        image_t out = { .w=img->w, .h=img->h, .bpp=0, .pixels=NULL }; // alloc in jpeg compress
+        image_t out = { .w=img->w, .h=img->h, .pixfmt=PIXFORMAT_JPEG, .size=0, .pixels=NULL }; // alloc in jpeg compress
         // When jpeg_compress needs more memory than in currently allocated it
         // will try to realloc. MP will detect that the pointer is outside of
         // the heap and return NULL which will cause an out of memory error.
         jpeg_compress(img, &out, quality, false);
-        write_data(&fp, out.pixels, out.bpp);
+        write_data(&fp, out.pixels, out.size);
         fb_free(); // frees alloc in jpeg_compress()
     }
     file_close(&fp);
