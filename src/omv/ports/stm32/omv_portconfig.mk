@@ -34,6 +34,7 @@ OMV_CFLAGS += -I$(TOP_DIR)/$(OMV_DIR)/common/
 OMV_CFLAGS += -I$(TOP_DIR)/$(OMV_DIR)/imlib/
 OMV_CFLAGS += -I$(TOP_DIR)/$(OMV_DIR)/modules/
 OMV_CFLAGS += -I$(TOP_DIR)/$(OMV_DIR)/sensors/
+OMV_CFLAGS += -I$(TOP_DIR)/$(OMV_DIR)/templates/
 OMV_CFLAGS += -I$(TOP_DIR)/$(OMV_DIR)/ports/$(PORT)/
 OMV_CFLAGS += -I$(TOP_DIR)/$(OMV_DIR)/ports/$(PORT)/modules/
 
@@ -140,6 +141,7 @@ FIRM_OBJ += $(addprefix $(BUILD)/$(OMV_DIR)/common/, \
 	mutex.o                     \
 	usbdbg.o                    \
 	sensor_utils.o              \
+	factoryreset.o              \
    )
 
 FIRM_OBJ += $(addprefix $(BUILD)/$(OMV_DIR)/sensors/,   \
@@ -149,7 +151,7 @@ FIRM_OBJ += $(addprefix $(BUILD)/$(OMV_DIR)/sensors/,   \
 	ov7690.o                    \
 	ov7725.o                    \
 	ov9650.o                    \
-	mt9v034.o                   \
+	mt9v0xx.o                   \
 	mt9m114.o                   \
 	lepton.o                    \
 	hm01b0.o                    \
@@ -513,7 +515,7 @@ UVC_OBJ += $(addprefix $(BUILD)/$(OMV_DIR)/sensors/, \
 	ov7670.o                                \
 	ov7725.o                                \
 	ov9650.o                                \
-	mt9v034.o                               \
+	mt9v0xx.o                               \
 	mt9m114.o                               \
 	lepton.o                                \
 	hm01b0.o                                \

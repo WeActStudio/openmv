@@ -87,6 +87,7 @@ target_include_directories(${MICROPY_TARGET} PRIVATE
     ${TOP_DIR}/${MLX90640_DIR}/include/
     ${TOP_DIR}/${MLX90641_DIR}/include/
     ${OMV_BOARD_CONFIG_DIR}
+    ${TOP_DIR}/${OMV_DIR}/templates/
 )
 
 file(GLOB OMV_USER_MODULES ${TOP_DIR}/${OMV_DIR}/modules/*.c)
@@ -106,6 +107,7 @@ target_sources(${MICROPY_TARGET} PRIVATE
     ${TOP_DIR}/${OMV_DIR}/common/mutex.c
     ${TOP_DIR}/${OMV_DIR}/common/usbdbg.c
     ${TOP_DIR}/${OMV_DIR}/common/sensor_utils.c
+    ${TOP_DIR}/${OMV_DIR}/common/factoryreset.c
 
     ${TOP_DIR}/${OMV_DIR}/sensors/ov2640.c
     ${TOP_DIR}/${OMV_DIR}/sensors/ov5640.c
@@ -113,7 +115,7 @@ target_sources(${MICROPY_TARGET} PRIVATE
     ${TOP_DIR}/${OMV_DIR}/sensors/ov7690.c
     ${TOP_DIR}/${OMV_DIR}/sensors/ov7725.c
     ${TOP_DIR}/${OMV_DIR}/sensors/ov9650.c
-    ${TOP_DIR}/${OMV_DIR}/sensors/mt9v034.c
+    ${TOP_DIR}/${OMV_DIR}/sensors/mt9v0xx.c
     ${TOP_DIR}/${OMV_DIR}/sensors/mt9m114.c
     ${TOP_DIR}/${OMV_DIR}/sensors/lepton.c
     ${TOP_DIR}/${OMV_DIR}/sensors/hm01b0.c

@@ -24,6 +24,7 @@ SRCS += $(addprefix common/,    \
 	mutex.c                     \
 	usbdbg.c                    \
 	sensor_utils.c              \
+	factoryreset.c              \
    )
 
 SRCS += $(addprefix sensors/,   \
@@ -33,7 +34,7 @@ SRCS += $(addprefix sensors/,   \
 	ov7690.c                    \
 	ov7725.c                    \
 	ov9650.c                    \
-	mt9v034.c                   \
+	mt9v0xx.c                   \
 	mt9m114.c                   \
 	lepton.c                    \
 	hm01b0.c                    \

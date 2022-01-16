@@ -19,6 +19,7 @@ FRESULT f_stat_helper(const TCHAR *path, FILINFO *fno);
 FRESULT f_mkdir_helper(const TCHAR *path);
 FRESULT f_unlink_helper(const TCHAR *path);
 FRESULT f_rename_helper(const TCHAR *path_old, const TCHAR *path_new);
+FRESULT f_touch_helper(const TCHAR *path);
 
 void ff_unsupported_format(FIL *fp);
 void ff_file_corrupted(FIL *fp);
@@ -26,6 +27,8 @@ void ff_not_equal(FIL *fp);
 void ff_no_intersection(FIL *fp);
 void file_read_open(FIL *fp, const char *path);
 void file_write_open(FIL *fp, const char *path);
+void file_read_write_open_existing(FIL *fp, const char *path);
+void file_read_write_open_always(FIL *fp, const char *path);
 void file_close(FIL *fp);
 void file_seek(FIL *fp, UINT offset);
 void file_truncate(FIL *fp);

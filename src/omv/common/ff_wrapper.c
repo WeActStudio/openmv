@@ -79,6 +79,18 @@ void file_write_open(FIL *fp, const char *path)
     if (res != FR_OK) ff_fail(fp, res);
 }
 
+void file_read_write_open_existing(FIL *fp, const char *path)
+{
+    FRESULT res = f_open_helper(fp, path, FA_READ|FA_WRITE|FA_OPEN_EXISTING);
+    if (res != FR_OK) ff_fail(fp, res);
+}
+
+void file_read_write_open_always(FIL *fp, const char *path)
+{
+    FRESULT res = f_open_helper(fp, path, FA_READ|FA_WRITE|FA_OPEN_ALWAYS);
+    if (res != FR_OK) ff_fail(fp, res);
+}
+
 void file_close(FIL *fp)
 {
     FRESULT res = f_close(fp);
@@ -168,6 +180,21 @@ FRESULT f_rename_helper(const TCHAR *path_old, const TCHAR *path_new) {
         return FR_NO_PATH;
     }
     return f_rename(fs_new, path_old, path_new);
+}
+
+FRESULT f_touch_helper(const TCHAR *path) {
+    FIL fp;
+    FATFS *fs = lookup_path(&path);
+    if (fs == NULL) {
+        return FR_NO_PATH;
+    }
+
+    if (f_stat(fs, path, NULL) != FR_OK) {
+        f_open(fs, &fp, path, FA_WRITE | FA_CREATE_ALWAYS);
+        f_close(&fp);
+    }
+
+    return FR_OK;
 }
 // When a sector boundary is encountered while writing a file and there are
 // more than 512 bytes left to write FatFs will detect that it can bypass

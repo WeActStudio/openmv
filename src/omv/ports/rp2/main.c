@@ -68,6 +68,12 @@
 #include "py_audio.h"
 #endif
 
+#if MICROPY_VFS_FAT && MICROPY_HW_USB_MSC
+#include "extmod/vfs.h"
+#include "extmod/vfs_fat.h"
+#include "common/factoryreset.h"
+#endif
+
 extern uint8_t __StackTop, __StackBottom;
 static char OMV_ATTR_SECTION(OMV_ATTR_ALIGNED(gc_heap[OMV_HEAP_SIZE], 4), ".heap");
 
@@ -113,7 +119,7 @@ void exec_boot_script(const char *path, bool interruptible)
         }
 
         // Parse, compile and execute the script.
-        pyexec_file_if_exists(path);
+        pyexec_file_if_exists(path, true);
         nlr_pop();
     } else {
         interrupted = true;
@@ -127,7 +133,6 @@ void exec_boot_script(const char *path, bool interruptible)
         mp_obj_print_exception(&mp_plat_print, (mp_obj_t)nlr.ret_val);
     }
 }
-
 
 int main(int argc, char **argv) {
     bool first_soft_reset = true;
@@ -204,11 +209,19 @@ soft_reset:
     }
     #endif
 
-    // Execute _boot.py to set up the filesystem.
     #if MICROPY_VFS_FAT && MICROPY_HW_USB_MSC
-    pyexec_frozen_module("_boot_fat.py");
+    // Mount or create a fresh filesystem.
+    mp_obj_t mount_point = MP_OBJ_NEW_QSTR(MP_QSTR__slash_);
+    mp_obj_t bdev = rp2_flash_type.make_new(&rp2_flash_type, 0, 0, NULL);
+    if (mp_vfs_mount_and_chdir_protected(bdev, mount_point) == -MP_ENODEV) {
+        // Create a fresh filesystem.
+        fs_user_mount_t *vfs  = mp_fat_vfs_type.make_new(&mp_fat_vfs_type, 1, 0, &bdev);
+        if (factoryreset_create_filesystem(vfs) == 0) {
+            mp_vfs_mount_and_chdir_protected(bdev, mount_point);
+        }
+    }
     #else
-    pyexec_frozen_module("_boot.py");
+    pyexec_frozen_module("_boot.py", false);
     #endif
 
     // Execute user scripts.
@@ -247,7 +260,7 @@ soft_reset:
             // Enable IDE interrupt
             usbdbg_set_irq_enabled(true);
             // Execute the script.
-            pyexec_str(usbdbg_get_script());
+            pyexec_str(usbdbg_get_script(), true);
             nlr_pop();
         } else {
             mp_obj_print_exception(&mp_plat_print, (mp_obj_t)nlr.ret_val);

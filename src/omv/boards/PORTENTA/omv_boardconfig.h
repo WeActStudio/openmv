@@ -57,7 +57,7 @@
 #define OMV_ENABLE_OV7725       (1)
 #define OMV_ENABLE_OV9650       (0)
 #define OMV_ENABLE_MT9M114      (0)
-#define OMV_ENABLE_MT9V034      (1)
+#define OMV_ENABLE_MT9V0XX      (1)
 #define OMV_ENABLE_LEPTON       (0)
 #define OMV_ENABLE_HM01B0       (1)
 #define OMV_ENABLE_GC2145       (1)
@@ -89,7 +89,7 @@
 #define OMV_USB_IRQN            (OTG_HS_IRQn)
 #define OMV_USB_ULPI            (1)
 #define OMV_USB_ULPI_DIR_PORT   (GPIOI)
-#define OMV_USB_ULPI_DIR_PIN    (11)
+#define OMV_USB_ULPI_DIR_PIN    (GPIO_PIN_11)
 #define OMV_USB_ULPI_DIR_CLK_ENABLE()   __HAL_RCC_GPIOI_CLK_ENABLE()
 
 // Defined for cpu frequency scaling to override the revid.

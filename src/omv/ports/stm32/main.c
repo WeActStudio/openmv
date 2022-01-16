@@ -91,120 +91,15 @@
 #include "mpbthciport.h"
 #endif
 
+#include "extmod/vfs.h"
+#include "extmod/vfs_fat.h"
+#include "common/factoryreset.h"
+
 int errno;
 extern char _vfs_buf[];
 static fs_user_mount_t *vfs_fat = (fs_user_mount_t *) &_vfs_buf;
 #if MICROPY_PY_THREAD
 pyb_thread_t pyb_thread_main;
-#endif
-
-static const char fresh_main_py[] =
-"# main.py -- put your code here!\n"
-"import pyb, time\n"
-"led = pyb.LED(3)\n"
-"usb = pyb.USB_VCP()\n"
-"while (usb.isconnected()==False):\n"
-"   led.on()\n"
-"   time.sleep_ms(150)\n"
-"   led.off()\n"
-"   time.sleep_ms(100)\n"
-"   led.on()\n"
-"   time.sleep_ms(150)\n"
-"   led.off()\n"
-"   time.sleep_ms(600)\n"
-;
-
-static const char fresh_readme_txt[] =
-"Thank you for supporting the OpenMV project!\r\n"
-"\r\n"
-"To download the IDE, please visit:\r\n"
-"https://openmv.io/pages/download\r\n"
-"\r\n"
-"For tutorials and documentation, please visit:\r\n"
-"http://docs.openmv.io/\r\n"
-"\r\n"
-"For technical support and projects, please visit the forums:\r\n"
-"http://forums.openmv.io/\r\n"
-"\r\n"
-"Please use github to report bugs and issues:\r\n"
-"https://github.com/openmv/openmv\r\n"
-;
-
-#if (OMV_ENABLE_SELFTEST == 1)
-static const char fresh_selftest_py[] =
-"import sensor, time, pyb\n"
-"\n"
-"def test_int_adc():\n"
-"    adc  = pyb.ADCAll(12)\n"
-"    # Test VBAT\n"
-"    vbat = adc.read_core_vbat()\n"
-"    vbat_diff = abs(vbat-"OMV_CORE_VBAT")\n"
-"    if (vbat_diff > 0.15):\n"
-"        raise Exception('INTERNAL ADC TEST FAILED VBAT=%fv'%vbat)\n"
-"\n"
-"    # Test VREF\n"
-"    vref = adc.read_core_vref()\n"
-"    vref_diff = abs(vref-1.2)\n"
-"    if (vref_diff > 0.1):\n"
-"        raise Exception('INTERNAL ADC TEST FAILED VREF=%fv'%vref)\n"
-"    adc = None\n"
-"    print('INTERNAL ADC TEST PASSED...')\n"
-"\n"
-"def test_color_bars():\n"
-"    sensor.reset()\n"
-"    # Set sensor settings\n"
-"    sensor.set_brightness(0)\n"
-"    sensor.set_saturation(3)\n"
-"    sensor.set_gainceiling(8)\n"
-"    sensor.set_contrast(2)\n"
-"\n"
-"    # Set sensor pixel format\n"
-"    sensor.set_framesize(sensor.QVGA)\n"
-"    sensor.set_pixformat(sensor.RGB565)\n"
-"\n"
-"    # Enable colorbar test mode\n"
-"    sensor.set_colorbar(True)\n"
-"\n"
-"    # Skip a few frames to allow the sensor settle down\n"
-"    for i in range(0, 100):\n"
-"        image = sensor.snapshot()\n"
-"\n"
-"    #color bars thresholds\n"
-"    t = [lambda r, g, b: r < 70  and g < 70  and b < 70,   # Black\n"
-"         lambda r, g, b: r < 70  and g < 70  and b > 200,  # Blue\n"
-"         lambda r, g, b: r > 200 and g < 70  and b < 70,   # Red\n"
-"         lambda r, g, b: r > 200 and g < 70  and b > 200,  # Purple\n"
-"         lambda r, g, b: r < 70  and g > 200 and b < 70,   # Green\n"
-"         lambda r, g, b: r < 70  and g > 200 and b > 200,  # Aqua\n"
-"         lambda r, g, b: r > 200 and g > 200 and b < 70,   # Yellow\n"
-"         lambda r, g, b: r > 200 and g > 200 and b > 200]  # White\n"
-"\n"
-"    # color bars are inverted for OV7725\n"
-"    if (sensor.get_id() == sensor.OV7725):\n"
-"        t = t[::-1]\n"
-"\n"
-"    #320x240 image with 8 color bars each one is approx 40 pixels.\n"
-"    #we start from the center of the frame buffer, and average the\n"
-"    #values of 10 sample pixels from the center of each color bar.\n"
-"    for i in range(0, 8):\n"
-"        avg = (0, 0, 0)\n"
-"        idx = 40*i+20 #center of colorbars\n"
-"        for off in range(0, 10): #avg 10 pixels\n"
-"            rgb = image.get_pixel(idx+off, 120)\n"
-"            avg = tuple(map(sum, zip(avg, rgb)))\n"
-"\n"
-"        if not t[i](avg[0]/10, avg[1]/10, avg[2]/10):\n"
-"            raise Exception('COLOR BARS TEST FAILED.'\n"
-"            'BAR#(%d): RGB(%d,%d,%d)'%(i+1, avg[0]/10, avg[1]/10, avg[2]/10))\n"
-"\n"
-"    print('COLOR BARS TEST PASSED...')\n"
-"\n"
-"if __name__ == '__main__':\n"
-"    print('')\n"
-"    test_int_adc()\n"
-"    if sensor.get_id() == sensor.OV7725: test_color_bars()\n"
-"\n"
-;
 #endif
 
 void flash_error(int n) {
@@ -259,50 +154,6 @@ void __attribute__((weak))
     __fatal_error("");
 }
 #endif
-
-void f_touch(const char *path)
-{
-    FIL fp;
-    if (f_stat(&vfs_fat->fatfs, path, NULL) != FR_OK) {
-        f_open(&vfs_fat->fatfs, &fp, path, FA_WRITE | FA_CREATE_ALWAYS);
-        f_close(&fp);
-    }
-}
-
-void make_flash_fs()
-{
-    FIL fp;
-    UINT n;
-
-    led_state(LED_RED, 1);
-
-    uint8_t working_buf[_MAX_SS];
-    if (f_mkfs(&vfs_fat->fatfs, FM_FAT, 0, working_buf, sizeof(working_buf)) != FR_OK) {
-        __fatal_error("Could not create LFS");
-    }
-
-    // Mark FS as OpenMV disk.
-    f_touch("/.openmv_disk");
-
-    // Create default main.py
-    f_open(&vfs_fat->fatfs, &fp, "/main.py", FA_WRITE | FA_CREATE_ALWAYS);
-    f_write(&fp, fresh_main_py, sizeof(fresh_main_py) - 1 /* don't count null terminator */, &n);
-    f_close(&fp);
-
-    // Create readme file
-    f_open(&vfs_fat->fatfs, &fp, "/README.txt", FA_WRITE | FA_CREATE_ALWAYS);
-    f_write(&fp, fresh_readme_txt, sizeof(fresh_readme_txt) - 1 /* don't count null terminator */, &n);
-    f_close(&fp);
-
-    #if (OMV_ENABLE_SELFTEST == 1)
-    // Create default selftest.py
-    f_open(&vfs_fat->fatfs, &fp, "/selftest.py", FA_WRITE | FA_CREATE_ALWAYS);
-    f_write(&fp, fresh_selftest_py, sizeof(fresh_selftest_py) - 1 /* don't count null terminator */, &n);
-    f_close(&fp);
-    #endif
-
-    led_state(LED_RED, 0);
-}
 
 #ifdef STACK_PROTECTOR
 uint32_t __stack_chk_guard=0xDEADBEEF;
@@ -371,25 +222,30 @@ FRESULT exec_boot_script(const char *path, bool selftest, bool interruptible, bo
 {
     nlr_buf_t nlr;
     bool interrupted = false;
-    FRESULT f_res = f_stat(&vfs_fat->fatfs, path, NULL);
+    FRESULT f_res = FR_NO_FILE;
 
-    if (f_res == FR_OK) {
-        if (nlr_push(&nlr) == 0) {
-            // Enable IDE interrupts if allowed.
-            if (interruptible) {
-                usbdbg_set_irq_enabled(true);
-                usbdbg_set_script_running(true);
-                #if OMV_ENABLE_WIFIDBG && MICROPY_PY_WINC1500
-                wifidbg_set_irq_enabled(wifidbg_enabled);
-                #endif
-            }
-
-            // Parse, compile and execute the script.
-            pyexec_file(path);
-            nlr_pop();
-        } else {
-            interrupted = true;
+    if (nlr_push(&nlr) == 0) {
+        // Enable IDE interrupts if allowed.
+        if (interruptible) {
+            usbdbg_set_irq_enabled(true);
+            usbdbg_set_script_running(true);
+            #if OMV_ENABLE_WIFIDBG && MICROPY_PY_WINC1500
+            wifidbg_set_irq_enabled(wifidbg_enabled);
+            #endif
         }
+
+        // Try to run the frozen module first.
+        if (pyexec_frozen_module(path, true) == false) {
+            // No frozen module, try the filesystem.
+            f_res = f_stat(&vfs_fat->fatfs, path, NULL);
+            if (f_res == FR_OK) {
+                // Parse, compile and execute the script.
+                pyexec_file(path, true);
+            }
+        }
+        nlr_pop();
+    } else {
+        interrupted = true;
     }
 
     // Disable IDE interrupts
@@ -620,8 +476,10 @@ soft_reset:
         FRESULT res = f_mount(&vfs_fat->fatfs);
 
         if (res == FR_NO_FILESYSTEM) {
-            // Create a fresh fs
-            make_flash_fs();
+            // Create a fresh filesystem.
+            led_state(LED_RED, 1);
+            factoryreset_create_filesystem(vfs_fat);
+            led_state(LED_RED, 0);
             // Flush storage
             storage_flush();
         } else if (res != FR_OK) {
@@ -642,7 +500,7 @@ soft_reset:
     #endif
 
     // Mark FS as OpenMV disk.
-    f_touch("/.openmv_disk");
+    f_touch_helper("/.openmv_disk");
 
     // Mount the storage device (there should be no other devices mounted at this point)
     // we allocate this structure on the heap because vfs->next is a root pointer.
@@ -673,15 +531,18 @@ soft_reset:
         openmv_config.wifidbg = false;
     #endif
 
+    // Execute frozen _boot.py (if any) for early system setup.
+    pyexec_frozen_module("_boot.py", false);
+
     // Run boot script(s)
     if (first_soft_reset) {
         // Execute the boot.py script before initializing the USB dev to
         // override the USB mode if required, otherwise VCP+MSC is used.
-        exec_boot_script("/boot.py", false, false, false);
+        exec_boot_script("boot.py", false, false, false);
         #if (OMV_ENABLE_SELFTEST == 1)
         // Execute the selftests.py script before the filesystem is mounted
         // to avoid corrupting the filesystem when selftests.py is removed.
-        exec_boot_script("/selftest.py", true, false, false);
+        exec_boot_script("selftest.py", true, false, false);
         #endif
     }
 
@@ -707,7 +568,7 @@ soft_reset:
 
     // Run main script if it exists.
     if (first_soft_reset) {
-        exec_boot_script("/main.py", false, true, openmv_config.wifidbg);
+        exec_boot_script("main.py", false, true, openmv_config.wifidbg);
     }
 
     do {
@@ -755,7 +616,7 @@ soft_reset:
                 #endif
 
                 // Execute the script.
-                pyexec_str(usbdbg_get_script());
+                pyexec_str(usbdbg_get_script(), true);
                 nlr_pop();
             } else {
                 mp_obj_print_exception(&mp_plat_print, (mp_obj_t)nlr.ret_val);
