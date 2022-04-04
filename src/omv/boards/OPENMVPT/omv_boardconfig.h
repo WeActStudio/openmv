@@ -40,12 +40,18 @@
 // Sensor Banding Filter Value
 #define OMV_OV7725_BANDING              (0x7F)
 
+// OV5640 Sensor Settings
+#define OMV_OV5640_XCLK_FREQ            (24000000)
+#define OMV_OV5640_PLL_CTRL2            (0x64)
+#define OMV_OV5640_PLL_CTRL3            (0x13)
+#define OMV_OV5640_REV_Y_CHECK          (1)
+#define OMV_OV5640_REV_Y_FREQ           (25000000)
+#define OMV_OV5640_REV_Y_CTRL2          (0x54)
+#define OMV_OV5640_REV_Y_CTRL3          (0x13)
+
 // Bootloader LED GPIO port/pin
 #define OMV_BOOTLDR_LED_PIN             (GPIO_PIN_1)
 #define OMV_BOOTLDR_LED_PORT            (GPIOC)
-
-// RAW buffer size
-#define OMV_RAW_BUF_SIZE                (33554432)
 
 // Enable hardware JPEG
 #define OMV_HARDWARE_JPEG               (1)
@@ -127,11 +133,17 @@
 #define OMV_OSC_USB_CLKSOURCE           RCC_USBCLKSOURCE_PLL
 #define OMV_OSC_RNG_CLKSOURCE           RCC_RNGCLKSOURCE_HSI48
 #define OMV_OSC_ADC_CLKSOURCE           RCC_ADCCLKSOURCE_PLL2
+//#define OMV_OSC_RTC_CLKSOURCE           RCC_RTCCLKSOURCE_LSE
 #define OMV_OSC_SPI123_CLKSOURCE        RCC_SPI123CLKSOURCE_PLL2
 
 // HSE/HSI/CSI State
+// The LSE/LSI and RTC are managed by micropython's rtc.c.
+// #define OMV_OSC_LSE_STATE               (RCC_LSE_ON)
+// #define OMV_OSC_LSE_DRIVE               (RCC_LSEDRIVE_HIGH)
 #define OMV_OSC_HSE_STATE               (RCC_HSE_ON)
 #define OMV_OSC_HSI48_STATE             (RCC_HSI48_ON)
+// Errata
+#define OMV_OMVPT_ERRATA_RTC            (1)
 
 // Flash Latency
 #define OMV_FLASH_LATENCY               (FLASH_LATENCY_2)

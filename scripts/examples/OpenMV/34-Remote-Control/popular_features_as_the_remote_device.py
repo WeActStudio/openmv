@@ -24,12 +24,12 @@ sensor.skip_frames(time = 2000)
 #
 # * message_id - CAN message to use for data transport on the can bus (11-bit).
 # * bit_rate - CAN bit rate.
-# * sampling_point - Tseg1/Tseg2 ratio. Typically 75%. (50.0, 62.5, 75, 87.5, etc.)
+# * sample_point - Tseg1/Tseg2 ratio. Typically 75%. (50.0, 62.5, 75, 87.5, etc.)
 #
 # NOTE: Master and slave message ids and can bit rates must match. Connect master can high to slave
 #       can high and master can low to slave can lo. The can bus must be terminated with 120 ohms.
 #
-# interface = rpc.rpc_can_slave(message_id=0x7FF, bit_rate=250000, sampling_point=75)
+# interface = rpc.rpc_can_slave(message_id=0x7FF, bit_rate=250000, sample_point=75)
 
 # Uncomment the below line to setup your OpenMV Cam for control over I2C.
 #
@@ -115,11 +115,13 @@ def face_detection(data):
 # When called returns if there's a "person" or "no_person" within view.
 #
 # data is unused
+labels, net = tf.load_builtin_model('person_detection')
 def person_detection(data):
+    global net
     sensor.set_pixformat(sensor.RGB565)
     sensor.set_framesize(sensor.QVGA)
-    scores = tf.classify("person_detection", sensor.snapshot())[0].output()
-    return ['person', 'no_person'][scores.index(max(scores))].encode()
+    scores = net.classify(sensor.snapshot())[0].output()
+    return labels[scores.index(max(scores))].encode()
 
 # When called returns the payload string for the largest qrcode
 # within the OpenMV Cam's field-of-view.

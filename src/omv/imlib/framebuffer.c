@@ -18,6 +18,7 @@
 #define CONSERVATIVE_JPEG_BUF_SIZE  (OMV_JPEG_BUF_SIZE-64)
 
 extern char _fb_base;
+extern char _fb_end;
 framebuffer_t *framebuffer = (framebuffer_t *) &_fb_base;
 
 extern char _jpeg_buf;
@@ -138,7 +139,7 @@ void framebuffer_update_jpeg_buffer()
 
     if (src->pixfmt != PIXFORMAT_INVALID &&
             framebuffer->streaming_enabled && jpeg_framebuffer->enabled) {
-        if (src->pixfmt == PIXFORMAT_JPEG) {
+        if (src->is_compressed) {
             bool does_not_fit = false;
 
             if (mutex_try_lock_alternate(&jpeg_framebuffer->lock, MUTEX_TID_OMV)) {
@@ -154,7 +155,7 @@ void framebuffer_update_jpeg_buffer()
             }
 
             if (does_not_fit) {
-                printf("Warning: JPEG too big! Trying framebuffer transfer using fallback method!\n");
+                printf("Warning: JPEG/PNG too big! Trying framebuffer transfer using fallback method!\n");
                 int new_size = fb_encode_for_ide_new_size(src);
                 fb_alloc_mark();
                 uint8_t *temp = fb_alloc(new_size, FB_ALLOC_NO_HINT);
@@ -248,7 +249,8 @@ static uint32_t framebuffer_raw_buffer_size()
     uint32_t size = (uint32_t) (fb_alloc_stack_pointer() - ((char *) framebuffer->data));
     // We don't want to give all of the frame buffer RAM to the frame buffer. So, we will limit
     // the maximum amount of RAM we return.
-    return IM_MIN(size, OMV_RAW_BUF_SIZE);
+    uint32_t raw_buf_size = (&_fb_end - &_fb_base);
+    return IM_MIN(size, raw_buf_size);
 }
 
 uint32_t framebuffer_get_buffer_size()

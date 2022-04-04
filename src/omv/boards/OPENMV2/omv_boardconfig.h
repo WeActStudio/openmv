@@ -43,9 +43,6 @@
 #define OMV_BOOTLDR_LED_PIN     (GPIO_PIN_2)
 #define OMV_BOOTLDR_LED_PORT    (GPIOC)
 
-// RAW buffer size
-#define OMV_RAW_BUF_SIZE        (153600)
-
 // Enable sensor drivers
 #define OMV_ENABLE_OV2640       (1)
 #define OMV_ENABLE_OV5640       (0)
@@ -106,10 +103,10 @@
 #define OMV_STACK_MEMORY    DTCM    // stack memory
 #define OMV_DMA_MEMORY      SRAM2   // Misc DMA buffers
 
-#define OMV_FB_SIZE         (150K)  // FB memory: header + QVGA/GS image
-#define OMV_FB_ALLOC_SIZE   (12K)   // minimum fb alloc size
-#define OMV_STACK_SIZE      (4K)
-#define OMV_HEAP_SIZE       (51K)
+#define OMV_FB_SIZE         (152K)  // FB memory: header + QVGA/GS image
+#define OMV_FB_ALLOC_SIZE   (10K)   // minimum fb alloc size
+#define OMV_STACK_SIZE      (8K)
+#define OMV_HEAP_SIZE       (47K)
 
 #define OMV_LINE_BUF_SIZE   (2 * 1024)  // Image line buffer round(320 * 2BPP * 2 buffers).
 #define OMV_MSC_BUF_SIZE    (2K)    // USB MSC bot data

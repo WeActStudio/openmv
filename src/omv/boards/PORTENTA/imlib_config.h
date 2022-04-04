@@ -110,7 +110,7 @@
 // #define IMLIB_ENABLE_HIGH_RES_APRILTAGS
 
 // Enable find_datamatrices() (26 KB)
-#define IMLIB_ENABLE_DATAMATRICES
+//#define IMLIB_ENABLE_DATAMATRICES
 
 // Enable find_barcodes() (42 KB)
 #define IMLIB_ENABLE_BARCODES
@@ -132,7 +132,7 @@
 #define IMLIB_FIND_TEMPLATE
 
 // Enable find_lbp()
-#define IMLIB_ENABLE_FIND_LBP
+//#define IMLIB_ENABLE_FIND_LBP
 
 // Enable find_keypoints()
 #define IMLIB_ENABLE_FIND_KEYPOINTS
@@ -148,5 +148,9 @@
 
 // Enable STM32 DMA2D
 #define IMLIB_ENABLE_DMA2D
+
+// Enable PNG encoder/decoder
+#define IMLIB_ENABLE_PNG_ENCODER
+#define IMLIB_ENABLE_PNG_DECODER
 
 #endif //__IMLIB_CONFIG_H__

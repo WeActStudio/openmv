@@ -1,0 +1,160 @@
+name: '🔥 Firmware Build'
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+    branches:    
+      - 'master'
+    paths:
+      - 'src/**'
+      - '.github/workflows/*.yml'
+      - '.github/workflows/*.json'
+      - '!**/README.md'
+      - '!**.rst'
+
+  pull_request:
+    branches:    
+      - 'master'
+    paths:
+      - 'src/**'
+      - '.github/workflows/*.yml'
+      - '.github/workflows/*.json'
+      - '!**/README.md'
+      - '!**.rst'
+
+jobs:
+  build-firmware:
+    runs-on: ubuntu-20.04
+    strategy:
+      matrix:
+        target: [OPENMV2, OPENMV3, OPENMV4, OPENMV4P, PORTENTA, OPENMVPT, NICLAV, NANO33, ARDUINO_NANO_RP2040_CONNECT]
+      fail-fast: false
+    steps:
+    - name: '⏳ Checkout repository'
+      uses: actions/checkout@v3
+      with:
+        submodules: false
+
+    - name: '🧱 Update submodules'
+      run: source tools/ci.sh && ci_update_submodules
+
+    - name: '♻ Caching dependencies'
+      uses: actions/cache@v2
+      id: cache
+      with:
+        path: ~/cache/gcc
+        key: 'gcc-arm-none-eabi-10-2020-q4-major'
+
+    - name: '🛠 Install toolchain '
+      if: steps.cache.outputs.cache-hit != 'true'
+      run: source tools/ci.sh && ci_install_arm_gcc
+
+    - name: '🏗 Build firmware'
+      run: source tools/ci.sh && ci_build_target ${{ matrix.target }}
+
+    - name: '⬆ Upload artifacts'
+      if: github.event_name != 'pull_request'
+      uses: actions/upload-artifact@v2
+      with:
+        name: firmware
+        path: firmware
+        if-no-files-found: error
+
+  stable-release:
+    needs: build-firmware
+    runs-on: ubuntu-20.04
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    steps:
+    - name: '⏳ Checkout repository'
+      uses: actions/checkout@v3
+      with:
+        submodules: false
+
+    - name: '🤌 Download artifacts'
+      uses: actions/download-artifact@v2
+      with:
+        name: firmware
+        path: firmware
+
+    - name: '📦 Package firmware'
+      run: source tools/ci.sh && ci_package_firmware_release ${{github.ref_name}}
+
+    - name: "✏️ Generate release changelog"
+      id: changelog
+      uses: mikepenz/release-changelog-builder-action@v2
+      with:
+        toTag: ${{ github.sha }}
+        configuration: '.github/workflows/changelog.json'
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: '🔥 Create stable release'
+      uses: softprops/action-gh-release@v1
+      with:
+        draft: true
+        files: firmware_*.zip
+        body: ${{steps.changelog.outputs.changelog}}
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: '🧹 Remove artifacts'
+      uses: geekyeggo/delete-artifact@v1
+      with:
+        name: firmware
+        failOnError: false
+
+  development-release:
+    needs: build-firmware
+    runs-on: ubuntu-20.04
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') == false
+    steps:
+    - name: '⏳ Checkout repository'
+      uses: actions/checkout@v3
+      with:
+        submodules: false
+
+    - name: '🤌 Download artifacts'
+      uses: actions/download-artifact@v2
+      with:
+        name: firmware
+        path: firmware
+
+    - name: '📦 Package firmware'
+      run: source tools/ci.sh && ci_package_firmware_development
+
+    - name: '🧹 Delete old release'
+      uses: dev-drprasad/delete-tag-and-release@v0.2.0
+      with:
+        delete_release: true
+        tag_name: development
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: "✏️ Generate release changelog"
+      id: changelog
+      uses: mikepenz/release-changelog-builder-action@v2
+      with:
+        toTag: ${{ github.sha }}
+        configuration: '.github/workflows/changelog.json'
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: '🔥 Create development release'
+      uses: softprops/action-gh-release@v1
+      with:
+        draft: false
+        name: Development Release
+        tag_name: development
+        body: |
+            **⚠️ This is a development release, and it may be unstable.**
+            ${{steps.changelog.outputs.changelog}}
+        files: firmware/firmware_*.zip
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: '🧹 Remove artifacts'
+      uses: geekyeggo/delete-artifact@v1
+      with:
+        name: firmware
+        failOnError: false

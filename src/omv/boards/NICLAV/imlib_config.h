@@ -141,12 +141,16 @@
 #define IMLIB_ENABLE_DESCRIPTOR
 
 // Enable find_hog()
-#define IMLIB_ENABLE_HOG
+// #define IMLIB_ENABLE_HOG
 
 // Enable selective_search()
-#define IMLIB_ENABLE_SELECTIVE_SEARCH
+// #define IMLIB_ENABLE_SELECTIVE_SEARCH
 
 // Enable STM32 DMA2D
 #define IMLIB_ENABLE_DMA2D
+
+// Enable PNG encoder/decoder
+#define IMLIB_ENABLE_PNG_ENCODER
+#define IMLIB_ENABLE_PNG_DECODER
 
 #endif //__IMLIB_CONFIG_H__
