@@ -40,7 +40,7 @@ jobs:
       run: source tools/ci.sh && ci_update_submodules
 
     - name: '♻ Caching dependencies'
-      uses: actions/cache@v2
+      uses: actions/cache@v3.0.2
       id: cache
       with:
         path: ~/cache/gcc
@@ -55,7 +55,7 @@ jobs:
 
     - name: '⬆ Upload artifacts'
       if: github.event_name != 'pull_request'
-      uses: actions/upload-artifact@v2
+      uses: actions/upload-artifact@v3
       with:
         name: firmware
         path: firmware
@@ -72,7 +72,7 @@ jobs:
         submodules: false
 
     - name: '🤌 Download artifacts'
-      uses: actions/download-artifact@v2
+      uses: actions/download-artifact@v3
       with:
         name: firmware
         path: firmware
@@ -82,7 +82,7 @@ jobs:
 
     - name: "✏️ Generate release changelog"
       id: changelog
-      uses: mikepenz/release-changelog-builder-action@v2
+      uses: mikepenz/release-changelog-builder-action@v3
       with:
         toTag: ${{ github.sha }}
         configuration: '.github/workflows/changelog.json'
@@ -108,6 +108,8 @@ jobs:
     needs: build-firmware
     runs-on: ubuntu-20.04
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') == false
+    permissions:
+      contents: write
     steps:
     - name: '⏳ Checkout repository'
       uses: actions/checkout@v3
@@ -115,7 +117,7 @@ jobs:
         submodules: false
 
     - name: '🤌 Download artifacts'
-      uses: actions/download-artifact@v2
+      uses: actions/download-artifact@v3
       with:
         name: firmware
         path: firmware
@@ -133,7 +135,7 @@ jobs:
 
     - name: "✏️ Generate release changelog"
       id: changelog
-      uses: mikepenz/release-changelog-builder-action@v2
+      uses: mikepenz/release-changelog-builder-action@v3
       with:
         toTag: ${{ github.sha }}
         configuration: '.github/workflows/changelog.json'

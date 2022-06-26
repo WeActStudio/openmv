@@ -346,9 +346,11 @@ int sensor_set_vsync_callback(vsync_cb_t vsync_cb)
 
 void DCMI_VsyncExtiCallback()
 {
-    __HAL_GPIO_EXTI_CLEAR_FLAG(1 << DCMI_VSYNC_IRQ_LINE);
-    if (sensor.vsync_callback != NULL) {
-        sensor.vsync_callback(HAL_GPIO_ReadPin(DCMI_VSYNC_PORT, DCMI_VSYNC_PIN));
+    if (__HAL_GPIO_EXTI_GET_FLAG(1 << DCMI_VSYNC_IRQ_LINE)) {
+        __HAL_GPIO_EXTI_CLEAR_FLAG(1 << DCMI_VSYNC_IRQ_LINE);
+        if (sensor.vsync_callback != NULL) {
+            sensor.vsync_callback(HAL_GPIO_ReadPin(DCMI_VSYNC_PORT, DCMI_VSYNC_PIN));
+        }
     }
 }
 
@@ -762,6 +764,8 @@ int sensor_snapshot(sensor_t *sensor, image_t *image, uint32_t flags)
     // wait for the start of the next frame when it's re-enabled again below. So, we do not
     // need to wait till there's no frame happening before enabling.
     if (!(DCMI->CR & DCMI_CR_ENABLE)) {
+        framebuffer_setup_buffers();
+
         // Setup the size and address of the transfer
         uint32_t bytes_per_pixel = sensor_get_src_bpp();
 
