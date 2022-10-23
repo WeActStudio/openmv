@@ -14,17 +14,16 @@
 
 #include "omv_boardconfig.h"
 #include "cambus.h"
-#if (OMV_ENABLE_TOF_VL53L5CX == 1)
-// Only have 1 ToF sensor.
-#define OMV_PY_TOF  (1)
-#include "vl53l5cx_api.h"
-#endif
-#include "framebuffer.h"
 
-#if (OMV_PY_TOF == 1)
+#if (MICROPY_PY_TOF == 1)
 #include "py_assert.h"
 #include "py_helper.h"
 #include "py_image.h"
+#include "framebuffer.h"
+
+#if (OMV_ENABLE_TOF_VL53L5CX == 1)
+#include "vl53l5cx_api.h"
+#endif
 
 #define VL53L5CX_ADDR                   0x52
 #define VL53L5CX_WIDTH                  8
@@ -213,7 +212,7 @@ mp_obj_t py_tof_init(uint n_args, const mp_obj_t *args, mp_map_t *kw_args)
 
     if (type == -1) {
         TOF_SCAN_RETRY:
-        cambus_init(&tof_bus, FIR_I2C_ID, CAMBUS_SPEED_STANDARD);
+        cambus_init(&tof_bus, TOF_I2C_ID, CAMBUS_SPEED_STANDARD);
         // Scan and detect any supported sensor.
         uint8_t dev_list[10];
         int dev_size = cambus_scan(&tof_bus, dev_list, sizeof(dev_list));
@@ -253,7 +252,7 @@ mp_obj_t py_tof_init(uint n_args, const mp_obj_t *args, mp_map_t *kw_args)
             TOF_VL53L5CX_RETRY:
             //vl53l5cx_dev.platform.bus     = tof_bus;
             //vl53l5cx_dev.platform.address = VL53L5CX_ADDRESS;
-            cambus_init(&tof_bus, FIR_I2C_ID, CAMBUS_SPEED_FAST);
+            cambus_init(&tof_bus, TOF_I2C_ID, CAMBUS_SPEED_FAST);
 
             // Check sensor and initialize.
 	        error |= vl53l5cx_is_alive(&vl53l5cx_dev, &isAlive);
@@ -699,5 +698,5 @@ const mp_obj_module_t tof_module = {
     .globals = (mp_obj_t) &globals_dict,
 };
 
-MP_REGISTER_MODULE(MP_QSTR_tof, tof_module, OMV_PY_TOF);
+MP_REGISTER_MODULE(MP_QSTR_tof, tof_module, MICROPY_PY_TOF);
 #endif

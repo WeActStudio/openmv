@@ -621,7 +621,10 @@ soft_reset:
             }
         } while (openmv_config.wifidbg == true);
 
-        usbdbg_wait_for_command(1000);
+        nlr_buf_t nlr;
+        if (nlr_push(&nlr) == 0) {
+            usbdbg_wait_for_command(1000);
+        }
     }
 
     // soft reset
@@ -630,13 +633,15 @@ soft_reset:
     // Disable all other IRQs except Systick
     irq_set_base_priority(IRQ_PRI_SYSTICK+1);
 
-    #if MICROPY_PY_BLUETOOTH
-    mp_bluetooth_deinit();
-    #endif
     #if MICROPY_PY_LWIP
     systick_disable_dispatch(SYSTICK_DISPATCH_LWIP);
     #endif
+    #if MICROPY_PY_BLUETOOTH
+    mp_bluetooth_deinit();
+    #endif
+    #if MICROPY_PY_NETWORK
     mod_network_deinit();
+    #endif
     timer_deinit();
     i2c_deinit_all();
     spi_deinit_all();

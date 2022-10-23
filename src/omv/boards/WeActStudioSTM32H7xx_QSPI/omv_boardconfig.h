@@ -20,7 +20,7 @@
 // Needed by the SWD JTAG testrig - located at the bottom of the frame buffer stack.
 #define OMV_SELF_TEST_SWD_ADDR  MAIN_FB()->pixfmt
 
-#define WeACtStudio
+#define WeActStudio
 
 // OpenMV Run in QSPI Flash
 // if not define this run in Internal Flash
@@ -59,10 +59,6 @@
 #define OMV_OV5640_REV_Y_FREQ   (25000000)
 #define OMV_OV5640_REV_Y_CTRL2  (0x54)
 #define OMV_OV5640_REV_Y_CTRL3  (0x13)
-
-// Bootloader LED GPIO port/pin
-#define OMV_BOOTLDR_LED_PIN     (GPIO_PIN_3)
-#define OMV_BOOTLDR_LED_PORT    (GPIOE)
 
 // Enable hardware JPEG
 #define OMV_HARDWARE_JPEG       (1)
@@ -314,8 +310,10 @@
 #define DCMI_FSYNC_LOW()        HAL_GPIO_WritePin(DCMI_FSYNC_PORT, DCMI_FSYNC_PIN, GPIO_PIN_RESET)
 #define DCMI_FSYNC_HIGH()       HAL_GPIO_WritePin(DCMI_FSYNC_PORT, DCMI_FSYNC_PIN, GPIO_PIN_SET)
 
-#define DCMI_VSYNC_IRQN         EXTI9_5_IRQn
-#define DCMI_VSYNC_IRQ_LINE     (7)
+#define DCMI_VSYNC_EXTI_IRQN    (EXTI9_5_IRQn)
+#define DCMI_VSYNC_EXTI_LINE    (7)
+#define DCMI_VSYNC_EXTI_GPIO    (EXTI_GPIOB)
+#define DCMI_VSYNC_EXTI_SHARED  (0)
 
 /*
 #define WINC_SPI                (SPI2)

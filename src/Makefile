@@ -27,7 +27,7 @@ SIZE    = $(Q)arm-none-eabi-size
 STRIP   = $(Q)arm-none-eabi-strip -s
 OBJCOPY = $(Q)arm-none-eabi-objcopy
 OBJDUMP = $(Q)arm-none-eabi-objdump
-PYTHON  = $(Q)python
+PYTHON  = $(Q)python3
 MKDFU   = micropython/tools/dfu.py
 PYDFU   = $(Q)../tools/pydfu.py
 MKDIR   = $(Q)mkdir
@@ -123,6 +123,11 @@ endif
 ifeq ($(MICROPY_PY_IMU), 1)
 MPY_CFLAGS += -DMICROPY_PY_IMU=1
 MICROPY_ARGS += MICROPY_PY_IMU=1
+endif
+
+ifeq ($(MICROPY_PY_TOF), 1)
+MPY_CFLAGS += -DMICROPY_PY_TOF=1
+MICROPY_ARGS += MICROPY_PY_TOF=1
 endif
 
 ifeq ($(MICROPY_PY_ULAB), 1)

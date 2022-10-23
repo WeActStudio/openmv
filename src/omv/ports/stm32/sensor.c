@@ -43,6 +43,7 @@ static bool first_line = false;
 static bool drop_frame = false;
 
 extern uint8_t _line_buf;
+extern uint32_t hal_get_exti_gpio(uint32_t line);
 
 void DCMI_IRQHandler(void) {
     HAL_DCMI_IRQHandler(&DCMIHandle);
@@ -254,10 +255,18 @@ uint32_t sensor_get_xclk_frequency()
 int sensor_set_xclk_frequency(uint32_t frequency)
 {
     #if (OMV_XCLK_SOURCE == OMV_XCLK_TIM)
-    /* TCLK (PCLK * 2) */
+    if (frequency == 0 && TIMHandle.Init.Period) {
+        HAL_TIM_PWM_Stop(&TIMHandle, DCMI_TIM_CHANNEL);
+        HAL_TIM_PWM_DeInit(&TIMHandle);
+        memset(&TIMHandle, 0, sizeof(TIMHandle));
+        TIMHandle.Instance = DCMI_TIM;
+        return 0;
+    }
+
+    // TCLK (PCLK * 2)
     int tclk = DCMI_TIM_PCLK_FREQ() * 2;
 
-    /* Period should be even */
+    // Period should be even
     int period = (tclk / frequency) - 1;
     int pulse = period / 2;
 
@@ -334,22 +343,26 @@ int sensor_set_vsync_callback(vsync_cb_t vsync_cb)
 {
     sensor.vsync_callback = vsync_cb;
     if (sensor.vsync_callback == NULL) {
+        #if (DCMI_VSYNC_EXTI_SHARED == 0)
         // Disable VSYNC EXTI IRQ
-        HAL_NVIC_DisableIRQ(DCMI_VSYNC_IRQN);
+        HAL_NVIC_DisableIRQ(DCMI_VSYNC_EXTI_IRQN);
+        #endif
     } else {
         // Enable VSYNC EXTI IRQ
-        NVIC_SetPriority(DCMI_VSYNC_IRQN, IRQ_PRI_EXTINT);
-        HAL_NVIC_EnableIRQ(DCMI_VSYNC_IRQN);
+        NVIC_SetPriority(DCMI_VSYNC_EXTI_IRQN, IRQ_PRI_EXTINT);
+        HAL_NVIC_EnableIRQ(DCMI_VSYNC_EXTI_IRQN);
     }
     return 0;
 }
 
 void DCMI_VsyncExtiCallback()
 {
-    if (__HAL_GPIO_EXTI_GET_FLAG(1 << DCMI_VSYNC_IRQ_LINE)) {
-        __HAL_GPIO_EXTI_CLEAR_FLAG(1 << DCMI_VSYNC_IRQ_LINE);
-        if (sensor.vsync_callback != NULL) {
-            sensor.vsync_callback(HAL_GPIO_ReadPin(DCMI_VSYNC_PORT, DCMI_VSYNC_PIN));
+    if (__HAL_GPIO_EXTI_GET_FLAG(1 << DCMI_VSYNC_EXTI_LINE)) {
+        if (hal_get_exti_gpio(DCMI_VSYNC_EXTI_LINE) == DCMI_VSYNC_EXTI_GPIO) {
+            __HAL_GPIO_EXTI_CLEAR_FLAG(1 << DCMI_VSYNC_EXTI_LINE);
+            if (sensor.vsync_callback != NULL) {
+                sensor.vsync_callback(HAL_GPIO_ReadPin(DCMI_VSYNC_PORT, DCMI_VSYNC_PIN));
+            }
         }
     }
 }

@@ -20,10 +20,6 @@
 // Needed by the SWD JTAG testrig - located at the bottom of the frame buffer stack.
 #define OMV_SELF_TEST_SWD_ADDR  MAIN_FB()->pixfmt
 
-// Flash sectors for the bootloader.
-// Flash FS sector, main FW sector, max sector.
-#define OMV_FLASH_LAYOUT        {1, 4, 11}
-
 #define OMV_XCLK_MCO            (0U)
 #define OMV_XCLK_TIM            (1U)
 
@@ -38,10 +34,6 @@
 
 // Sensor Banding Filter Value
 #define OMV_OV7725_BANDING      (0x8F)
-
-// Bootloader LED GPIO port/pin
-#define OMV_BOOTLDR_LED_PIN     (GPIO_PIN_1)
-#define OMV_BOOTLDR_LED_PORT    (GPIOC)
 
 // Enable sensor drivers
 #define OMV_ENABLE_OV2640       (0)
@@ -115,8 +107,6 @@
 #define OMV_FFS_BUF_SIZE    (32K)   // Flash filesystem cache
 #define OMV_JPEG_BUF_SIZE   (22 * 1024) // IDE JPEG buffer (header + data).
 
-#define OMV_BOOT_ORIGIN     0x08000000
-#define OMV_BOOT_LENGTH     32K
 #define OMV_TEXT_ORIGIN     0x08020000
 #define OMV_TEXT_LENGTH     1920K
 #define OMV_DTCM_ORIGIN     0x20000000
@@ -202,8 +192,10 @@
 #define DCMI_PWDN_LOW()         HAL_GPIO_WritePin(DCMI_PWDN_PORT, DCMI_PWDN_PIN, GPIO_PIN_RESET)
 #define DCMI_PWDN_HIGH()        HAL_GPIO_WritePin(DCMI_PWDN_PORT, DCMI_PWDN_PIN, GPIO_PIN_SET)
 
-#define DCMI_VSYNC_IRQN         EXTI9_5_IRQn
-#define DCMI_VSYNC_IRQ_LINE     (7)
+#define DCMI_VSYNC_EXTI_IRQN    (EXTI9_5_IRQn)
+#define DCMI_VSYNC_EXTI_LINE    (7)
+#define DCMI_VSYNC_EXTI_GPIO    (EXTI_GPIOB)
+#define DCMI_VSYNC_EXTI_SHARED  (0)
 
 #define WINC_SPI                (SPI2)
 #define WINC_SPI_AF             (GPIO_AF5_SPI2)

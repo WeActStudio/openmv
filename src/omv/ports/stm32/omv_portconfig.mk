@@ -7,7 +7,7 @@ LDSCRIPT  ?= stm32fxxx
 CFLAGS += -std=gnu99 -Wall -Werror -Warray-bounds -mthumb -nostartfiles -fdata-sections -ffunction-sections
 CFLAGS += -fno-inline-small-functions -D$(MCU) -D$(CFLAGS_MCU) -D$(ARM_MATH) -DARM_NN_TRUNCATE\
           -fsingle-precision-constant -Wdouble-promotion -mcpu=$(CPU) -mtune=$(CPU) -mfpu=$(FPU) -mfloat-abi=hard
-CFLAGS += -D__FPU_PRESENT=1 -D__VFP_FP__ -DUSE_USB_FS -DUSE_DEVICE_MODE -DUSE_USB_OTG_ID=0 -DHSE_VALUE=$(OMV_HSE_VALUE)\
+CFLAGS += -D__FPU_PRESENT=1 -D__VFP_FP__ -DUSE_DEVICE_MODE -DHSE_VALUE=$(OMV_HSE_VALUE)\
           -D$(TARGET) -DVECT_TAB_OFFSET=$(VECT_TAB_OFFSET) -DMAIN_APP_ADDR=$(MAIN_APP_ADDR) -DSTM32_HAL_H=$(HAL_INC)
 CFLAGS += $(OMV_BOARD_EXTRA_CFLAGS)
 
@@ -54,6 +54,7 @@ OMV_CFLAGS += -I$(BUILD)/$(TENSORFLOW_DIR)/
 OMV_CFLAGS += -I$(TOP_DIR)/$(LIBPDM_DIR)/
 
 ifeq ($(OMV_ENABLE_BL), 1)
+CFLAGS     += -DOMV_ENABLE_BOOTLOADER
 BL_CFLAGS  := $(CFLAGS) $(HAL_CFLAGS)
 BL_CFLAGS  += -I$(OMV_BOARD_CONFIG_DIR)
 BL_CFLAGS  += -I$(TOP_DIR)/$(BOOTLDR_DIR)/include/
@@ -160,6 +161,7 @@ FIRM_OBJ += $(addprefix $(BUILD)/$(OMV_DIR)/sensors/,   \
 	mt9m114.o                   \
 	lepton.o                    \
 	hm01b0.o                    \
+	hm0360.o                    \
 	gc2145.o                    \
 	paj6100.o                   \
 	frogeye2020.o               \
@@ -215,6 +217,7 @@ FIRM_OBJ += $(addprefix $(BUILD)/$(OMV_DIR)/imlib/, \
 	selective_search.o          \
 	sincos_tab.o                \
 	stats.o                     \
+	stereo.o                    \
 	template.o                  \
 	xyz_tab.o                   \
 	yuv.o                       \
@@ -537,6 +540,7 @@ UVC_OBJ += $(addprefix $(BUILD)/$(OMV_DIR)/sensors/, \
 	mt9m114.o                               \
 	lepton.o                                \
 	hm01b0.o                                \
+	hm0360.o                                \
 	gc2145.o                                \
 	paj6100.o                               \
 	frogeye2020.o                           \

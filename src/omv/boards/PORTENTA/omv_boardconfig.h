@@ -17,10 +17,6 @@
 #define OMV_UNIQUE_ID_ADDR      0x1FF1E800
 #define OMV_UNIQUE_ID_SIZE      3 // 3 words
 
-// Flash sectors for the bootloader.
-// Flash FS sector, main FW sector, max sector.
-#define OMV_FLASH_LAYOUT        {1, 2, 15}
-
 #define OMV_XCLK_MCO            (0U)
 #define OMV_XCLK_TIM            (1U)
 #define OMV_XCLK_OSC            (2U)
@@ -46,10 +42,6 @@
 #define OMV_OV5640_REV_Y_CTRL2  (0x7E)
 #define OMV_OV5640_REV_Y_CTRL3  (0x13)
 
-// Bootloader LED GPIO port/pin
-#define OMV_BOOTLDR_LED_PIN     (GPIO_PIN_6)
-#define OMV_BOOTLDR_LED_PORT    (GPIOK)
-
 // Enable hardware JPEG
 #define OMV_HARDWARE_JPEG       (1)
 
@@ -66,6 +58,7 @@
 #define OMV_ENABLE_MT9V0XX      (1)
 #define OMV_ENABLE_LEPTON       (0)
 #define OMV_ENABLE_HM01B0       (1)
+#define OMV_ENABLE_HM0360       (1)
 #define OMV_ENABLE_GC2145       (0)
 
 // Enable sensor features
@@ -176,8 +169,6 @@
 #define OMV_FIR_LEPTON_BUF_SIZE (1K)        // FIR Lepton Packet Double Buffer (328 bytes)
 #define OMV_JPEG_BUF_SIZE       (1024*1024) // IDE JPEG buffer (header + data).
 
-#define OMV_BOOT_ORIGIN         0x08000000
-#define OMV_BOOT_LENGTH         128K
 #define OMV_TEXT_ORIGIN         0x08040000
 #define OMV_TEXT_LENGTH         1792K
 #define OMV_DTCM_ORIGIN         0x20000000  // Note accessible by CPU and MDMA only.
@@ -346,8 +337,10 @@
 #define DCMI_FSYNC_HIGH()
 #endif
 
-#define DCMI_VSYNC_IRQN         EXTI9_5_IRQn
-#define DCMI_VSYNC_IRQ_LINE     (5)
+#define DCMI_VSYNC_EXTI_IRQN    (EXTI9_5_IRQn)
+#define DCMI_VSYNC_EXTI_LINE    (5)
+#define DCMI_VSYNC_EXTI_GPIO    (EXTI_GPIOI)
+#define DCMI_VSYNC_EXTI_SHARED  (1)
 
 #define SOFT_I2C_PORT                GPIOB
 #define SOFT_I2C_SIOC_PIN            GPIO_PIN_10

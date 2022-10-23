@@ -38,6 +38,7 @@ SRCS += $(addprefix sensors/,   \
 	mt9m114.c                   \
 	lepton.c                    \
 	hm01b0.c                    \
+	hm0360.c                    \
 	gc2145.c                    \
 	paj6100.c                   \
 	frogeye2020.c               \
@@ -93,6 +94,7 @@ SRCS += $(addprefix imlib/,     \
 	selective_search.c          \
 	sincos_tab.c                \
 	stats.c                     \
+	stereo.c                    \
 	template.c                  \
 	xyz_tab.c                   \
 	yuv.c                       \
