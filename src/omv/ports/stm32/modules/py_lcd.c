@@ -461,8 +461,8 @@ static void spi_lcd_callback(SPI_HandleTypeDef *hspi)
             }
             case SPI_TX_CB_MEMORY_WRITE: {
                 uint16_t *addr = spi_tx_cb_state_memory_write_addr;
-                size_t count = IM_MIN(spi_tx_cb_state_memory_write_count, (65536-8));
-                spi_tx_cb_state = (spi_tx_cb_state_memory_write_count > (65536-8)) ? SPI_TX_CB_MEMORY_WRITE : SPI_TX_CB_DISPLAY_ON;
+                size_t count = IM_MIN(spi_tx_cb_state_memory_write_count, (65536-8u));
+                spi_tx_cb_state = (spi_tx_cb_state_memory_write_count > (65536-8u)) ? SPI_TX_CB_MEMORY_WRITE : SPI_TX_CB_DISPLAY_ON;
                 spi_tx_cb_state_memory_write_addr += count;
                 spi_tx_cb_state_memory_write_count -= count;
                 if (spi_tx_cb_state_memory_write_first) {
@@ -1879,6 +1879,10 @@ STATIC mp_obj_t py_lcd_display(uint n_args, const mp_obj_t *args, mp_map_t *kw_a
     if ((!got_x_scale) && (!got_x_size) && got_y_size) arg_x_scale = arg_y_scale;
     if ((!got_y_scale) && (!got_y_size) && got_x_size) arg_y_scale = arg_x_scale;
 
+    if ((!lcd_triple_buffer) && (arg_y_scale < 0)) {
+        mp_raise_msg(&mp_type_ValueError, MP_ERROR_TEXT("Vertical flip requires triple buffering!"));
+    }
+
     switch (lcd_type) {
         #ifdef OMV_SPI_LCD_CONTROLLER
         case LCD_SHIELD_0_96:
@@ -2062,5 +2066,5 @@ void py_lcd_init0()
     py_lcd_deinit();
 }
 
-MP_REGISTER_MODULE(MP_QSTR_lcd, lcd_module, MICROPY_PY_LCD);
+MP_REGISTER_MODULE(MP_QSTR_lcd, lcd_module);
 #endif // MICROPY_PY_LCD

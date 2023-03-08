@@ -551,7 +551,7 @@ void HAL_SPI_MspInit(SPI_HandleTypeDef *hspi)
     #endif
 }
 
-void HAL_SPI_MspDeinit(SPI_HandleTypeDef *hspi)
+void HAL_SPI_MspDeInit(SPI_HandleTypeDef *hspi)
 {
 
 }
@@ -774,7 +774,7 @@ void HAL_DAC_MspInit(DAC_HandleTypeDef *hdac)
     #endif
 }
 
-void HAL_DAC_MspDeinit(DAC_HandleTypeDef *hdac)
+void HAL_DAC_MspDeInit(DAC_HandleTypeDef *hdac)
 {
     #if defined(OMV_SPI_LCD_BL_DAC)
     if (hdac->Instance == OMV_SPI_LCD_BL_DAC) {

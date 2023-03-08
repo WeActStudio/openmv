@@ -106,6 +106,7 @@ FIRM_OBJ += $(addprefix $(BUILD)/$(OMV_DIR)/common/, \
 	trace.o                     \
 	mutex.o                     \
 	usbdbg.o                    \
+	tinyusb_debug.o             \
 	sensor_utils.o              \
    )
 
@@ -208,6 +209,15 @@ FIRM_OBJ += $(addprefix $(BUILD)/$(MICROPY_DIR)/,\
 	)
 
 FIRM_OBJ += $(addprefix $(BUILD)/$(MICROPY_DIR)/extmod/,\
+	modujson.o          \
+	moduselect.o        \
+	modure.o            \
+	modframebuf.o       \
+	moduasyncio.o       \
+	moductypes.o        \
+	moduzlib.o          \
+	moduhashlib.o       \
+	moduheapq.o         \
 	modubinascii.o      \
 	modurandom.o        \
 	modutimeq.o         \
@@ -239,6 +249,7 @@ FIRM_OBJ += $(addprefix $(BUILD)/$(MICROPY_DIR)/shared/,\
 	runtime/pyexec.o            \
 	runtime/interrupt_char.o    \
 	runtime/sys_stdio_mphal.o   \
+	runtime/stdout_helpers.o    \
 	timeutils/timeutils.o       \
 	readline/readline.o         \
 	)
@@ -317,6 +328,7 @@ FIRM_OBJ += $(addprefix $(BUILD)/$(MICROPY_DIR)/modules/ulab/,\
 	code/numpy/fft/fft.o                \
 	code/numpy/fft/fft_tools.o          \
 	code/numpy/filter.o                 \
+	code/numpy/io/io.o                  \
 	code/numpy/linalg/linalg.o          \
 	code/numpy/linalg/linalg_tools.o    \
 	code/numpy/ndarray/ndarray_iter.o   \

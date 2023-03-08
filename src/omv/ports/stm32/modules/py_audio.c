@@ -43,7 +43,7 @@ static DFSDM_Channel_HandleTypeDef  hdfsdm;
 static DFSDM_Filter_HandleTypeDef   hdfsdm_filter[AUDIO_MAX_CHANNELS];
 static DMA_HandleTypeDef            hdma_filter[AUDIO_MAX_CHANNELS];
 // NOTE: placed in D2 memory.
-#define PDM_BUFFER_SIZE             (512)
+#define PDM_BUFFER_SIZE             (512 * 2)
 int32_t OMV_ATTR_SECTION(OMV_ATTR_ALIGNED(PDM_BUFFER[PDM_BUFFER_SIZE], 32), ".d2_dma_buffer");
 #define SaturaLH(N, L, H)           (((N)<(L))?(L):(((N)>(H))?(H):(N)))
 #else
@@ -533,5 +533,5 @@ const mp_obj_module_t audio_module = {
     .globals = (mp_obj_t)&globals_dict,
 };
 
-MP_REGISTER_MODULE(MP_QSTR_audio, audio_module, MICROPY_PY_AUDIO);
+MP_REGISTER_MODULE(MP_QSTR_audio, audio_module);
 #endif //MICROPY_PY_AUDIO

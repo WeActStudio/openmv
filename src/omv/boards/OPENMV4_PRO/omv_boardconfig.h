@@ -58,7 +58,7 @@
 #define OMV_ENABLE_OV9650       (1)
 #define OMV_ENABLE_MT9M114      (1)
 #define OMV_ENABLE_MT9V0XX      (1)
-#define OMV_ENABLE_LEPTON       (0)
+#define OMV_ENABLE_LEPTON       (1)
 #define OMV_ENABLE_HM01B0       (0)
 #define OMV_ENABLE_PAJ6100      (1)
 #define OMV_ENABLE_FROGEYE2020  (1)
@@ -113,11 +113,13 @@
 #define OMV_OSC_PLL2VCO         (RCC_PLL2VCOWIDE)
 #define OMV_OSC_PLL2FRAC        (0)
 
-// PLL3 160MHz for ADC and SPI123
+// PLL3P 160MHz for SPI123
+// PLL3Q 80MHz for SPI6
+// PLL3R 160MHz for ADC
 #define OMV_OSC_PLL3M           (6)
 #define OMV_OSC_PLL3N           (80)
 #define OMV_OSC_PLL3P           (2)
-#define OMV_OSC_PLL3Q           (2)
+#define OMV_OSC_PLL3Q           (4)
 #define OMV_OSC_PLL3R           (2)
 #define OMV_OSC_PLL3VCI         (RCC_PLL3VCIRANGE_2)
 #define OMV_OSC_PLL3VCO         (RCC_PLL3VCOWIDE)
@@ -129,6 +131,7 @@
 #define OMV_OSC_RNG_CLKSOURCE       RCC_RNGCLKSOURCE_HSI48
 #define OMV_OSC_ADC_CLKSOURCE       RCC_ADCCLKSOURCE_PLL3
 #define OMV_OSC_SPI123_CLKSOURCE    RCC_SPI123CLKSOURCE_PLL3
+#define OMV_OSC_SPI6_CLKSOURCE      RCC_SPI6CLKSOURCE_PLL3
 
 // HSE/HSI/CSI State
 #define OMV_OSC_LSE_STATE       (RCC_LSE_BYPASS)
@@ -144,7 +147,6 @@
 // Linker script constants (see the linker script template stm32fxxx.ld.S).
 // Note: fb_alloc is a stack-based, dynamically allocated memory on FB.
 // The maximum available fb_alloc memory = FB_ALLOC_SIZE + FB_SIZE - (w*h*bpp).
-#define OMV_FFS_MEMORY          DTCM        // Flash filesystem cache memory
 #define OMV_MAIN_MEMORY         SRAM1       // data, bss and heap
 #define OMV_STACK_MEMORY        ITCM        // stack memory
 #define OMV_DMA_MEMORY          SRAM3       // Misc DMA buffers memory.
@@ -152,6 +154,7 @@
 #define OMV_JPEG_MEMORY         DRAM        // JPEG buffer memory buffer.
 #define OMV_JPEG_MEMORY_OFFSET  (31M)       // JPEG buffer is placed after FB/fballoc memory.
 #define OMV_VOSPI_MEMORY        SRAM4       // VoSPI buffer memory.
+#define OMV_VOSPI_MEMORY_OFFSET (4K)        // First 4K reserved for D3 DMA buffers.
 #define OMV_FB_OVERLAY_MEMORY   AXI_SRAM    // Fast fb_alloc memory.
 #define OMV_FB_OVERLAY_MEMORY_OFFSET    (496*1024) // Fast fb_alloc memory size.
 #define OMV_CYW43_MEMORY        FLASH_EXT   // CYW43 firmware in external flash mmap'd flash.
@@ -160,7 +163,7 @@
 #define OMV_FB_SIZE             (20M)       // FB memory: header + VGA/GS image
 #define OMV_FB_ALLOC_SIZE       (11M)       // minimum fb alloc size
 #define OMV_STACK_SIZE          (64K)
-#define OMV_HEAP_SIZE           (198K)
+#define OMV_HEAP_SIZE           (197K)
 #define OMV_SDRAM_SIZE          (32 * 1024 * 1024) // This needs to be here for UVC firmware.
 
 #define OMV_LINE_BUF_SIZE       (11 * 1024) // Image line buffer round(2592 * 2BPP * 2 buffers).
@@ -169,8 +172,9 @@
 #define OMV_FIR_LEPTON_BUF_SIZE (1K)        // FIR Lepton Packet Double Buffer (328 bytes)
 #define OMV_JPEG_BUF_SIZE       (1024*1024) // IDE JPEG buffer (header + data).
 
-#define OMV_TEXT_ORIGIN         0x08040000
-#define OMV_TEXT_LENGTH         1792K
+// Memory map.
+#define OMV_FLASH_ORIGIN        0x08000000
+#define OMV_FLASH_LENGTH        2048K
 #define OMV_DTCM_ORIGIN         0x20000000  // Note accessible by CPU and MDMA only.
 #define OMV_DTCM_LENGTH         128K
 #define OMV_ITCM_ORIGIN         0x00000000
@@ -185,6 +189,12 @@
 #define OMV_AXI_SRAM_LENGTH     512K
 #define OMV_DRAM_ORIGIN         0xC0000000
 #define OMV_DRAM_LENGTH         32M
+
+// Flash configuration.
+#define OMV_FLASH_FFS_ORIGIN    0x08020000
+#define OMV_FLASH_FFS_LENGTH    128K
+#define OMV_FLASH_TXT_ORIGIN    0x08040000
+#define OMV_FLASH_TXT_LENGTH    1792K
 #define OMV_FLASH_EXT_ORIGIN    0x90000000
 #define OMV_FLASH_EXT_LENGTH    32M
 
@@ -201,11 +211,10 @@
 #define OMV_DMA_REGION_D2_SIZE  MPU_REGION_SIZE_32KB
 
 // Domain 3 DMA buffers region.
-// Used for VOSPI memory.
-//#define OMV_DMA_MEMORY_D3       SRAM4
-//#define OMV_DMA_MEMORY_D3_SIZE  (64*1024) // Reserved memory for DMA buffers
-//#define OMV_DMA_REGION_D3_BASE  (OMV_SRAM4_ORIGIN+(0*1024))
-//#define OMV_DMA_REGION_D3_SIZE  MPU_REGION_SIZE_64KB
+#define OMV_DMA_MEMORY_D3       SRAM4
+#define OMV_DMA_MEMORY_D3_SIZE  (4*1024) // Reserved memory for DMA buffers
+#define OMV_DMA_REGION_D3_BASE  (OMV_SRAM4_ORIGIN+(0*1024))
+#define OMV_DMA_REGION_D3_SIZE  MPU_REGION_SIZE_4KB
 
 // AXI QoS - Low-High (0:15) - default 0
 #define OMV_AXI_QOS_MDMA_R_PRI  15 // Max pri to move data.
@@ -312,42 +321,41 @@
 #define DCMI_VSYNC_EXTI_GPIO    (EXTI_GPIOG)
 #define DCMI_VSYNC_EXTI_SHARED  (0)
 
-#if 0
-#define ISC_SPI                     (SPI3)
-// SPI1/2/3 clock source is PLL3 (160MHz/8 == 20MHz) - Minimum (164*240*8*27 = 8,501,760Hz)
-#define ISC_SPI_PRESCALER           (SPI_BAUDRATEPRESCALER_8)
+#define ISC_SPI                     (SPI6)
+// SPI6 clock source is PLL3Q (80MHz/4 == 20MHz) - Minimum (164*240*8*27 = 8,501,760Hz)
+#define ISC_SPI_PRESCALER           (SPI_BAUDRATEPRESCALER_4)
 
-#define ISC_SPI_IRQn                (SPI3_IRQn)
-#define ISC_SPI_IRQHandler          (SPI3_IRQHandler)
+#define ISC_SPI_IRQn                (SPI6_IRQn)
+#define ISC_SPI_IRQHandler          (SPI6_IRQHandler)
 
-#define ISC_SPI_DMA_IRQn            (DMA1_Stream0_IRQn)
-#define ISC_SPI_DMA_STREAM          (DMA1_Stream0)
+#define ISC_SPI_DMA_IRQn            (BDMA_Channel1_IRQn)
+#define ISC_SPI_DMA_STREAM          (BDMA_Channel1)
 
-#define ISC_SPI_DMA_REQUEST         (DMA_REQUEST_SPI3_RX)
-#define ISC_SPI_DMA_IRQHandler      (DMA1_Stream0_IRQHandler)
+#define ISC_SPI_DMA_REQUEST         (BDMA_REQUEST_SPI6_RX)
+#define ISC_SPI_DMA_IRQHandler      (BDMA_Channel1_IRQHandler)
 
-#define ISC_SPI_RESET()             __HAL_RCC_SPI3_FORCE_RESET()
-#define ISC_SPI_RELEASE()           __HAL_RCC_SPI3_RELEASE_RESET()
+#define ISC_SPI_RESET()             __HAL_RCC_SPI6_FORCE_RESET()
+#define ISC_SPI_RELEASE()           __HAL_RCC_SPI6_RELEASE_RESET()
 
-#define ISC_SPI_CLK_ENABLE()        __HAL_RCC_SPI3_CLK_ENABLE()
-#define ISC_SPI_CLK_DISABLE()       __HAL_RCC_SPI3_CLK_DISABLE()
+#define ISC_SPI_CLK_ENABLE()        __HAL_RCC_SPI6_CLK_ENABLE()
+#define ISC_SPI_CLK_DISABLE()       __HAL_RCC_SPI6_CLK_DISABLE()
+#define ISC_SPI_DMA_CLK_ENABLE()    __HAL_RCC_BDMA_CLK_ENABLE()
 
-#define ISC_SPI_SCLK_PIN            (GPIO_PIN_3)
-#define ISC_SPI_SCLK_PORT           (GPIOB)
-#define ISC_SPI_SCLK_AF             (GPIO_AF6_SPI3)
+#define ISC_SPI_SCLK_PIN            (GPIO_PIN_13)
+#define ISC_SPI_SCLK_PORT           (GPIOG)
+#define ISC_SPI_SCLK_AF             (GPIO_AF5_SPI6)
 
-#define ISC_SPI_MISO_PIN            (GPIO_PIN_4)
-#define ISC_SPI_MISO_PORT           (GPIOB)
-#define ISC_SPI_MISO_AF             (GPIO_AF6_SPI3)
+#define ISC_SPI_MISO_PIN            (GPIO_PIN_12)
+#define ISC_SPI_MISO_PORT           (GPIOG)
+#define ISC_SPI_MISO_AF             (GPIO_AF5_SPI6)
 
-#define ISC_SPI_MOSI_PIN            (GPIO_PIN_5)
-#define ISC_SPI_MOSI_PORT           (GPIOB)
-#define ISC_SPI_MOSI_AF             (GPIO_AF7_SPI3)
+#define ISC_SPI_MOSI_PIN            (GPIO_PIN_14)
+#define ISC_SPI_MOSI_PORT           (GPIOG)
+#define ISC_SPI_MOSI_AF             (GPIO_AF5_SPI6)
 
 #define ISC_SPI_SSEL_PIN            (GPIO_PIN_15)
 #define ISC_SPI_SSEL_PORT           (GPIOA)
-#define ISC_SPI_SSEL_AF             (GPIO_AF6_SPI3)
-#endif
+#define ISC_SPI_SSEL_AF             (GPIO_AF7_SPI6)
 
 #define IMU_CHIP_LSM6DS3                (1)
 #define OMV_IMU_X_Y_ROTATION_DEGREES    0
@@ -407,9 +415,10 @@
 #define OMV_ENABLE_FIR_MLX90640             (1)
 #define OMV_ENABLE_FIR_MLX90641             (1)
 #define OMV_ENABLE_FIR_AMG8833              (1)
-#define OMV_ENABLE_FIR_LEPTON               (1)
+#define OMV_ENABLE_FIR_LEPTON               (0)
 #define OMV_ENABLE_TOF_VL53L5CX             (1)
 
+#if 0
 // FIR Lepton
 #define OMV_FIR_LEPTON_I2C_BUS              (FIR_I2C_ID)
 #define OMV_FIR_LEPTON_I2C_BUS_SPEED        (FIR_I2C_SPEED)
@@ -432,6 +441,7 @@
 #define OMV_FIR_LEPTON_CS_PORT              (GPIOA)
 #define OMV_FIR_LEPTON_CS_HIGH()            HAL_GPIO_WritePin(OMV_FIR_LEPTON_CS_PORT, OMV_FIR_LEPTON_CS_PIN, GPIO_PIN_SET)
 #define OMV_FIR_LEPTON_CS_LOW()             HAL_GPIO_WritePin(OMV_FIR_LEPTON_CS_PORT, OMV_FIR_LEPTON_CS_PIN, GPIO_PIN_RESET)
+#endif
 
 // Enable additional GPIO banks for DRAM...
 #define OMV_ENABLE_GPIO_BANK_F

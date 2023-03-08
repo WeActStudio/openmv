@@ -14,7 +14,6 @@ set(CMSIS_DIR               hal/cmsis)
 set(LEPTON_DIR              drivers/lepton)
 set(LSM6DS3_DIR             drivers/lsm6ds3)
 set(WINC1500_DIR            drivers/winc1500)
-set(NINAW10_DIR             drivers/ninaw10)
 set(MLX90621_DIR            drivers/mlx90621)
 set(MLX90640_DIR            drivers/mlx90640)
 set(MLX90641_DIR            drivers/mlx90641)
@@ -78,7 +77,6 @@ target_include_directories(${MICROPY_TARGET} PRIVATE
     ${TOP_DIR}/${LEPTON_DIR}/include/
     ${TOP_DIR}/${LSM6DS3_DIR}/include/
     ${TOP_DIR}/${WINC1500_DIR}/include/
-    ${TOP_DIR}/${NINAW10}/include/
     ${TOP_DIR}/${MLX90621_DIR}/include/
     ${TOP_DIR}/${MLX90640_DIR}/include/
     ${TOP_DIR}/${MLX90641_DIR}/include/
@@ -102,6 +100,7 @@ target_sources(${MICROPY_TARGET} PRIVATE
     ${TOP_DIR}/${OMV_DIR}/common/trace.c
     ${TOP_DIR}/${OMV_DIR}/common/mutex.c
     ${TOP_DIR}/${OMV_DIR}/common/usbdbg.c
+    ${TOP_DIR}/${OMV_DIR}/common/tinyusb_debug.c
     ${TOP_DIR}/${OMV_DIR}/common/sensor_utils.c
     ${TOP_DIR}/${OMV_DIR}/common/factoryreset.c
 
@@ -231,6 +230,7 @@ if(MICROPY_PY_ULAB)
         ${MICROPY_ULAB_DIR}/code/numpy/fft/fft.c
         ${MICROPY_ULAB_DIR}/code/numpy/fft/fft_tools.c
         ${MICROPY_ULAB_DIR}/code/numpy/filter.c
+        ${MICROPY_ULAB_DIR}/code/numpy/io/io.c
         ${MICROPY_ULAB_DIR}/code/numpy/linalg/linalg.c
         ${MICROPY_ULAB_DIR}/code/numpy/linalg/linalg_tools.c
         ${MICROPY_ULAB_DIR}/code/numpy/ndarray/ndarray_iter.c
